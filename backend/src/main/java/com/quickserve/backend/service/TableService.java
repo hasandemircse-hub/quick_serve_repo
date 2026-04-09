@@ -1,13 +1,14 @@
 package com.quickserve.backend.service;
 
-import com.quickserve.backend.model.RestaurantTable;
-import com.quickserve.backend.model.TableStatus;
-import com.quickserve.backend.repository.TableRepository;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Optional;
+import com.quickserve.backend.model.RestaurantTable;
+import com.quickserve.backend.model.TableStatus;
+import com.quickserve.backend.repository.TableRepository;
 
 @Service
 public class TableService {

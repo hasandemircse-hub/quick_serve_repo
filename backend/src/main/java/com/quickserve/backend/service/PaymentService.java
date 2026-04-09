@@ -1,14 +1,15 @@
 package com.quickserve.backend.service;
 
-import com.quickserve.backend.model.Payment;
-import com.quickserve.backend.model.PaymentStatus;
-import com.quickserve.backend.model.Order;
-import com.quickserve.backend.repository.PaymentRepository;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Optional;
+import com.quickserve.backend.model.Order;
+import com.quickserve.backend.model.Payment;
+import com.quickserve.backend.model.PaymentStatus;
+import com.quickserve.backend.repository.PaymentRepository;
 
 @Service
 public class PaymentService {

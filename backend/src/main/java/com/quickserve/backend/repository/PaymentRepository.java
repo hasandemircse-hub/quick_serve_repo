@@ -1,13 +1,14 @@
 package com.quickserve.backend.repository;
 
-import com.quickserve.backend.model.Payment;
-import com.quickserve.backend.model.PaymentStatus;
-import com.quickserve.backend.model.Order;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-import java.util.Optional;
+import com.quickserve.backend.model.Order;
+import com.quickserve.backend.model.Payment;
+import com.quickserve.backend.model.PaymentStatus;
 
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, Long> {

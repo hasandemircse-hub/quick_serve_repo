@@ -1,16 +1,16 @@
 package com.quickserve.backend.service;
 
+import java.util.List;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
 import com.quickserve.backend.model.Order;
 import com.quickserve.backend.model.OrderStatus;
 import com.quickserve.backend.model.RestaurantTable;
 import com.quickserve.backend.model.User;
 import com.quickserve.backend.repository.OrderRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Optional;
 
 @Service
 public class OrderService {
