@@ -1,0 +1,31 @@
+package com.quickserve.backend.repository;
+
+import com.quickserve.backend.entity.Review;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.util.List;
+import java.util.Optional;
+
+public interface ReviewRepository extends JpaRepository<Review, Long> {
+
+    List<Review> findByRestaurantIdOrderByCreatedAtDesc(Long restaurantId);
+
+    List<Review> findByAssignedWaiterIdOrderByCreatedAtDesc(Long waiterId);
+
+    Optional<Review> findByTableSessionId(Long sessionId);
+
+    @Query("SELECT AVG(r.rating) FROM Review r WHERE r.restaurant.id = :restaurantId")
+    Double averageRatingByRestaurant(@Param("restaurantId") Long restaurantId);
+
+    @Query("SELECT AVG(r.rating) FROM Review r WHERE r.assignedWaiter.id = :waiterId")
+    Double averageRatingByWaiter(@Param("waiterId") Long waiterId);
+
+    long countByAssignedWaiterId(Long waiterId);
+
+    @Modifying
+    @Query("DELETE FROM Review r WHERE r.restaurant.id = :restaurantId")
+    void deleteByRestaurantId(@Param("restaurantId") Long restaurantId);
+}

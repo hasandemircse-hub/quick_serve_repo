@@ -1,0 +1,26 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="512" cy="512" r="512" fill="#E53935"/>
+
+  <!-- Plate -->
+  <ellipse cx="512" cy="650" rx="280" ry="80" fill="#FFFFFF"/>
+  <ellipse cx="512" cy="640" rx="260" ry="60" fill="#F5F5F5"/>
+
+  <!-- Food on plate (stylized) -->
+  <ellipse cx="450" cy="620" rx="40" ry="25" fill="#8BC34A"/>
+  <ellipse cx="520" cy="610" rx="35" ry="20" fill="#FF9800"/>
+  <ellipse cx="580" cy="625" rx="45" ry="30" fill="#4CAF50"/>
+
+  <!-- Fork -->
+  <rect x="380" y="300" width="8" height="200" fill="#FFFFFF"/>
+  <rect x="375" y="300" width="18" height="20" fill="#FFFFFF"/>
+  <rect x="370" y="290" width="28" height="10" fill="#FFFFFF"/>
+
+  <!-- Knife -->
+  <rect x="420" y="320" width="8" height="180" fill="#FFFFFF"/>
+  <polygon points="420,320 428,320 435,310 435,290 420,290" fill="#FFFFFF"/>
+
+  <!-- Spoon -->
+  <rect x="460" y="340" width="8" height="160" fill="#FFFFFF"/>
+  <ellipse cx="464" cy="340" rx="15" ry="25" fill="#FFFFFF"/>
+</svg>
