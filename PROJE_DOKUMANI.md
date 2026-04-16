@@ -1,4 +1,4 @@
-# QuickServe — Proje Akış Dokümantasyonu
+# QuickServe (v0.0.1) — Proje Akış Dokümantasyonu-16/04/2026
 
 > Oluşturulma: 2026-04-16  
 > Kapsam: Flutter frontend + Spring Boot backend — tüm roller için tam akış analizi + eksik implementasyon raporu
