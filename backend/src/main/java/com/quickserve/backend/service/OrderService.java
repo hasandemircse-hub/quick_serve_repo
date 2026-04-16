@@ -181,7 +181,7 @@ public class OrderService {
                 .quantity(i.getQuantity())
                 .unitPrice(i.getUnitPrice())
                 .note(i.getNote())
-                .selectedNoteOptions(i.getSelectedNoteOptions())
+                .selectedNoteOptions(new java.util.ArrayList<>(i.getSelectedNoteOptions()))
                 .status(i.getStatus())
                 .sortOrder(i.getSortOrder())
                 .build();

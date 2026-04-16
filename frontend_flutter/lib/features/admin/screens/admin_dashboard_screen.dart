@@ -43,7 +43,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _tabs.length, vsync: this);
+    _tabController =
+        TabController(length: _tabs.length, initialIndex: 2, vsync: this);
     _loadData(showLoading: true);
     _loadUserInfo();
   }
@@ -161,7 +162,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
                     staff: _staff,
                     onRefresh: () => _loadData(),
                     currentUsername:
-                        ref.read(authProvider).state.username ?? ''),
+                        ref.read(authProvider).state.username ?? '',
+                    currentRole:
+                        ref.read(authProvider).state.role ?? ''),
                 _ReportsView(tables: _tables),
               ],
             ),
@@ -1149,10 +1152,12 @@ class _StaffView extends StatelessWidget {
   final List<dynamic> staff;
   final VoidCallback onRefresh;
   final String currentUsername;
+  final String currentRole;
   const _StaffView(
       {required this.staff,
       required this.onRefresh,
-      required this.currentUsername});
+      required this.currentUsername,
+      required this.currentRole});
 
   @override
   Widget build(BuildContext context) {
@@ -1351,11 +1356,12 @@ class _StaffView extends StatelessWidget {
                                   onPressed: () =>
                                       _showStaffFormDialog(context, member),
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.more_vert),
-                                  onPressed: () => _showStaffActions(
-                                      context, member, currentUsername),
-                                ),
+                                if (member['username'] != currentUsername)
+                                  IconButton(
+                                    icon: const Icon(Icons.more_vert),
+                                    onPressed: () => _showStaffActions(
+                                        context, member, currentUsername),
+                                  ),
                               ],
                             ),
                           ],
@@ -1398,6 +1404,8 @@ class _StaffView extends StatelessWidget {
 
   void _showStaffFormDialog(BuildContext context, [dynamic existing]) {
     final isEdit = existing != null;
+    final isSelf =
+        isEdit && (existing['username'] as String?) == currentUsername;
     final formKey = GlobalKey<FormState>();
     final usernameCtrl =
         TextEditingController(text: existing?['username'] as String? ?? '');
@@ -1530,23 +1538,29 @@ class _StaffView extends StatelessWidget {
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.work),
                     ),
-                    items: const [
-                      DropdownMenuItem(
-                          value: 'RESTAURANT_ADMIN',
-                          child: Text('Restoran Admini')),
-                      DropdownMenuItem(
+                    items: [
+                      if (currentRole == 'SUPERADMIN' ||
+                          selectedRole == 'RESTAURANT_ADMIN')
+                        const DropdownMenuItem(
+                            value: 'RESTAURANT_ADMIN',
+                            child: Text('Restoran Admini')),
+                      const DropdownMenuItem(
                           value: 'HEAD_WAITER',
                           child: Text('Baş Garson')),
-                      DropdownMenuItem(
+                      const DropdownMenuItem(
                           value: 'WAITER', child: Text('Garson')),
-                      DropdownMenuItem(
+                      const DropdownMenuItem(
                           value: 'CHEF', child: Text('Aşçı')),
-                      DropdownMenuItem(
+                      const DropdownMenuItem(
                           value: 'VALET', child: Text('Vale')),
                     ],
-                    onChanged: (val) {
-                      if (val != null) setS(() => selectedRole = val);
-                    },
+                    onChanged: (isSelf ||
+                            (selectedRole == 'RESTAURANT_ADMIN' &&
+                                currentRole != 'SUPERADMIN'))
+                        ? null
+                        : (val) {
+                            if (val != null) setS(() => selectedRole = val);
+                          },
                   ),
                 ],
               ),
@@ -1606,34 +1620,37 @@ class _StaffView extends StatelessWidget {
       builder: (ctx) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ListTile(
-            leading: Icon(
-                member['isOnLeave'] == true ? Icons.work : Icons.beach_access),
-            title: Text(
-                member['isOnLeave'] == true ? 'İzni Kaldır' : 'İzne Çıkar'),
-            onTap: () {
-              Navigator.pop(ctx);
-              ApiClient.instance
-                  .post('${ApiConstants.adminStaff}/${member['id']}/leave',
-                      data: {'onLeave': !(member['isOnLeave'] == true)})
-                  .then((_) => onRefresh());
-            },
-          ),
-          ListTile(
-            leading: Icon(member['isActive'] == true
-                ? Icons.block
-                : Icons.check_circle),
-            title: Text(
-                member['isActive'] == true ? 'Pasif Yap' : 'Aktif Yap'),
-            onTap: () {
-              Navigator.pop(ctx);
-              ApiClient.instance
-                  .post(
-                      '${ApiConstants.adminStaff}/${member['id']}/active',
-                      data: {'active': !(member['isActive'] == true)})
-                  .then((_) => onRefresh());
-            },
-          ),
+          if (!isSelf)
+            ListTile(
+              leading: Icon(member['isOnLeave'] == true
+                  ? Icons.work
+                  : Icons.beach_access),
+              title: Text(
+                  member['isOnLeave'] == true ? 'İzni Kaldır' : 'İzne Çıkar'),
+              onTap: () {
+                Navigator.pop(ctx);
+                ApiClient.instance
+                    .post('${ApiConstants.adminStaff}/${member['id']}/leave',
+                        data: {'onLeave': !(member['isOnLeave'] == true)})
+                    .then((_) => onRefresh());
+              },
+            ),
+          if (!isSelf)
+            ListTile(
+              leading: Icon(member['isActive'] == true
+                  ? Icons.block
+                  : Icons.check_circle),
+              title: Text(
+                  member['isActive'] == true ? 'Pasif Yap' : 'Aktif Yap'),
+              onTap: () {
+                Navigator.pop(ctx);
+                ApiClient.instance
+                    .post(
+                        '${ApiConstants.adminStaff}/${member['id']}/active',
+                        data: {'active': !(member['isActive'] == true)})
+                    .then((_) => onRefresh());
+              },
+            ),
           if (!isSelf)
             ListTile(
               leading: const Icon(Icons.delete, color: Colors.red),

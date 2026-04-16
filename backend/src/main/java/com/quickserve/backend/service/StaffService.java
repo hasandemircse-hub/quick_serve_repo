@@ -46,6 +46,10 @@ public class StaffService {
             throw new BusinessException("SUPERADMIN rolü bu endpoint ile oluşturulamaz");
         }
         if (request.getRole() == UserRole.RESTAURANT_ADMIN) {
+            User caller = securityUtils.getCurrentUser();
+            if (caller.getRole() != UserRole.SUPERADMIN) {
+                throw new BusinessException("Restoran admini yalnızca superadmin tarafından eklenebilir");
+            }
             // Bir restoranda sadece bir RESTAURANT_ADMIN olabilir
             if (userRepository.existsByRestaurantIdAndRole(restaurantId, UserRole.RESTAURANT_ADMIN)) {
                 throw new BusinessException("Bu restoran için zaten bir yönetici mevcut");
@@ -76,6 +80,10 @@ public class StaffService {
             user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         }
         if (request.getRole() != null && request.getRole() != UserRole.SUPERADMIN) {
+            User currentUser = securityUtils.getCurrentUser();
+            if (currentUser.getId().equals(userId)) {
+                throw new BusinessException("Kendi rolünüzü değiştiremezsiniz");
+            }
             user.setRole(request.getRole());
         }
         return toDto(userRepository.save(user));
@@ -91,6 +99,10 @@ public class StaffService {
 
     @Transactional
     public void setActive(Long userId, boolean active) {
+        User currentUser = securityUtils.getCurrentUser();
+        if (!active && currentUser.getId().equals(userId)) {
+            throw new BusinessException("Kendi hesabınızı pasif yapamazsınız");
+        }
         User user = findById(userId);
         user.setIsActive(active);
         userRepository.save(user);
