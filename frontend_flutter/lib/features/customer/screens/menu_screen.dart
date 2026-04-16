@@ -270,12 +270,12 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(Icons.table_restaurant,
-                    size: 12, color: Colors.white),
+                    size: 12, color: Colors.black87),
                 const SizedBox(width: 4),
                 Text('Masa $_tableNumber',
                     style: const TextStyle(
                         fontSize: 13,
-                        color: Colors.white,
+                        color: Colors.black87,
                         fontWeight: FontWeight.w500)),
               ],
             ),
