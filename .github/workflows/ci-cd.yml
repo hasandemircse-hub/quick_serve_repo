@@ -119,7 +119,7 @@ jobs:
 
     environment:
       name: production
-      url: ${{ secrets.DEPLOY_URL }}
+      url: http://3.73.40.114
 
     steps:
       - uses: actions/checkout@v4
