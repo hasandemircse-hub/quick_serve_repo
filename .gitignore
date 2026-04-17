@@ -28,3 +28,4 @@ frontend_flutter/pubspec.lock
 # Logs
 logs/
 *.log
+*.pem
