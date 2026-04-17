@@ -9,7 +9,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/quickserve-backend
+  IMAGE_NAME: hasandemircse-hub/quick_serve/quickserve-backend
 
 jobs:
   # ─── Test ─────────────────────────────────────────────────────────────────
@@ -48,17 +48,9 @@ jobs:
           SPRING_PROFILES_ACTIVE: test
         run: ./mvnw test --no-transfer-progress
 
-      - name: Publish test results
-        uses: dorny/test-reporter@v1
-        if: always()
-        with:
-          name: Maven Tests
-          path: backend/target/surefire-reports/*.xml
-          reporter: java-junit
-
-  # ─── Build & Push Image ───────────────────────────────────────────────────
+  # ─── Build & Push ─────────────────────────────────────────────────────────
   build:
-    name: Build & Push Docker Image
+    name: Build & Push
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -67,12 +59,26 @@ jobs:
       contents: read
       packages: write
 
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
-
     steps:
       - uses: actions/checkout@v4
 
+      # Flutter Web Build
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Build Flutter Web
+        working-directory: ./frontend_flutter
+        run: flutter build web --dart-define=API_URL=http://${{ secrets.DEPLOY_HOST }}/api --release
+
+      - name: Upload Flutter build
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-web
+          path: frontend_flutter/build/web/
+
+      # Backend Build
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -80,10 +86,11 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build JAR (skip tests - already ran)
+      - name: Build JAR
         working-directory: ./backend
         run: ./mvnw package -DskipTests --no-transfer-progress
 
+      # Docker Image
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -94,21 +101,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest
-
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: ./backend
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -126,28 +124,55 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1
+      - name: Download Flutter build
+        uses: actions/download-artifact@v4
+        with:
+          name: flutter-web
+          path: flutter-web/
+
+      - name: Copy config files to server
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "docker-compose.yml,nginx.conf,flutter-web/"
+          target: ${{ secrets.DEPLOY_PATH }}
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: GHCR_TOKEN,GITHUB_ACTOR,DEPLOY_PATH
           script: |
-            cd ${{ secrets.DEPLOY_PATH }}
+            cd $DEPLOY_PATH
 
-            # Yeni image'ı çek
-            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker pull ${{ needs.build.outputs.image-tag }}
+            # Registry'ye giriş yap
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
-            # Yedek: eski image'ları temizle (son 2 tut)
-            docker images ghcr.io/${{ github.repository }}/quickserve-backend \
-              --format "{{.ID}}" | tail -n +3 | xargs -r docker rmi || true
+            # Yeni backend image'ını çek
+            docker pull ghcr.io/hasandemircse-hub/quick_serve/quickserve-backend:latest
 
-            # docker-compose.yml güncelle ve yeniden başlat
-            docker compose up -d --no-deps backend
+            # Flutter web dosyalarını volume'a kopyala
+            docker run --rm \
+              -v $DEPLOY_PATH/flutter-web:/src:ro \
+              -v quickserve_flutter_web:/dst \
+              alpine sh -c "cp -r /src/. /dst/"
+
+            # Tüm servisleri başlat / güncelle
+            docker compose up -d
+
+            # Eski image'ları temizle
+            docker image prune -f
 
             # Health check
-            sleep 15
-            curl -sf http://localhost:8080/api/actuator/health || exit 1
+            sleep 20
+            curl -sf http://localhost/api/actuator/health || exit 1
 
-            echo "Deploy completed successfully at $(date)"
+            echo "Deploy tamamlandı: $(date)"

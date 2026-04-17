@@ -20,10 +20,7 @@ services:
     restart: unless-stopped
 
   backend:
-    image: quickserve-backend:latest
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ghcr.io/hasandemircse-hub/quick_serve/quickserve-backend:latest
     container_name: quickserve_backend
     depends_on:
       postgres:
