@@ -151,7 +151,7 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GHCR_TOKEN,GITHUB_ACTOR,DEPLOY_PATH
           script: |
-            cd $DEPLOY_PATH
+            cd /opt/quickserve
 
             # Registry'ye giriş yap
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
@@ -161,12 +161,12 @@ jobs:
 
             # Flutter web dosyalarını volume'a kopyala
             docker run --rm \
-              -v $DEPLOY_PATH/flutter-web:/src:ro \
+              -v /opt/quickserve/flutter-web:/src:ro \
               -v quickserve_flutter_web:/dst \
               alpine sh -c "cp -r /src/. /dst/"
 
             # Tüm servisleri başlat / güncelle
-            docker compose up -d
+            docker-compose up -d
 
             # Eski image'ları temizle
             docker image prune -f
