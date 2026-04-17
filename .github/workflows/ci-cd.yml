@@ -151,8 +151,6 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GHCR_TOKEN,GITHUB_ACTOR,DEPLOY_PATH
           script: |
-            cd /opt/quickserve
-
             # Registry'ye giriş yap
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
@@ -166,13 +164,25 @@ jobs:
               alpine sh -c "cp -r /src/. /dst/"
 
             # Tüm servisleri başlat / güncelle
-            docker-compose up -d
+            docker-compose -f /opt/quickserve/docker-compose.yml --env-file /opt/quickserve/.env up -d
 
             # Eski image'ları temizle
             docker image prune -f
 
-            # Health check
-            sleep 20
-            curl -sf http://localhost/api/actuator/health || exit 1
+            # Health check (Spring Boot başlaması için bekle)
+            echo "Backend başlaması bekleniyor..."
+            for i in $(seq 1 12); do
+              sleep 10
+              if curl -sf http://localhost/api/actuator/health; then
+                echo "Health check başarılı!"
+                break
+              fi
+              echo "Deneme $i/12..."
+              if [ $i -eq 12 ]; then
+                echo "Health check başarısız!"
+                docker-compose -f /opt/quickserve/docker-compose.yml logs backend
+                exit 1
+              fi
+            done
 
             echo "Deploy tamamlandı: $(date)"

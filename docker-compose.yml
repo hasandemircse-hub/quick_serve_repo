@@ -63,3 +63,5 @@ volumes:
   postgres_data:
   backend_logs:
   flutter_web:
+    external: true
+    name: quickserve_flutter_web
