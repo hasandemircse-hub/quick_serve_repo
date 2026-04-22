@@ -19,6 +19,7 @@ class LocalStorage {
   static const _userFullNameKey = 'user_full_name';
   static const _userRoleKey = 'user_role';
   static const _restaurantNameKey = 'restaurant_name';
+  static const _restaurantIdKey = 'restaurant_id';
   static const _isImpersonatedKey = 'is_impersonated';
 
   static Future<void> init() async {
@@ -104,6 +105,7 @@ class LocalStorage {
     String? fullName,
     required String role,
     String? restaurantName,
+    int? restaurantId,
     bool isImpersonated = false,
   }) async {
     final prefs = await SharedPreferences.getInstance();
@@ -115,6 +117,11 @@ class LocalStorage {
     } else {
       await prefs.remove(_restaurantNameKey);
     }
+    if (restaurantId != null) {
+      await prefs.setInt(_restaurantIdKey, restaurantId);
+    } else {
+      await prefs.remove(_restaurantIdKey);
+    }
     await prefs.setBool(_isImpersonatedKey, isImpersonated);
   }
 
@@ -125,6 +132,7 @@ class LocalStorage {
       'fullName': prefs.getString(_userFullNameKey),
       'role': prefs.getString(_userRoleKey) ?? '',
       'restaurantName': prefs.getString(_restaurantNameKey),
+      'restaurantId': prefs.getInt(_restaurantIdKey),
       'isImpersonated': prefs.getBool(_isImpersonatedKey) ?? false,
     };
   }
@@ -135,6 +143,7 @@ class LocalStorage {
     await prefs.remove(_userFullNameKey);
     await prefs.remove(_userRoleKey);
     await prefs.remove(_restaurantNameKey);
+    await prefs.remove(_restaurantIdKey);
     await prefs.remove(_isImpersonatedKey);
   }
 }

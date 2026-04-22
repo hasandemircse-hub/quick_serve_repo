@@ -26,8 +26,16 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // Geliştirmede Flutter web dev server rastgele portta çalışır.
+        // CORS whitelist + localhost:* pattern ile origin'leri birleştiriyoruz.
+        String[] configured = allowedOrigins.split(",");
+        String[] patterns = new String[configured.length + 2];
+        System.arraycopy(configured, 0, patterns, 0, configured.length);
+        patterns[configured.length] = "http://localhost:*";
+        patterns[configured.length + 1] = "https://localhost:*";
+
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns(allowedOrigins.split(","))
+                .setAllowedOriginPatterns(patterns)
                 .withSockJS();
     }
 

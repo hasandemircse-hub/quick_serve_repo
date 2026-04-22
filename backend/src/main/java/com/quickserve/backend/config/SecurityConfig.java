@@ -44,6 +44,8 @@ public class SecurityConfig {
                 .requestMatchers("/auth/**").permitAll()
                 // Swagger / Actuator
                 .requestMatchers("/swagger-ui/**", "/api-docs/**", "/actuator/health").permitAll()
+                // WebSocket handshake (SockJS + raw). JWT query param ile doğrulanır.
+                .requestMatchers("/ws", "/ws/**").permitAll()
                 // Sadece SUPERADMIN
                 .requestMatchers("/superadmin/**").hasRole("SUPERADMIN")
                 // Restoran admin + superadmin

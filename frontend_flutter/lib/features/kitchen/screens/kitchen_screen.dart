@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/websocket_service.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/providers/auth_provider.dart';
 
@@ -15,22 +17,93 @@ class KitchenScreen extends ConsumerStatefulWidget {
 class _KitchenScreenState extends ConsumerState<KitchenScreen> {
   List<dynamic> _orders = [];
   bool _loading = true;
+  int? _subscribedRestaurantId;
 
   @override
   void initState() {
     super.initState();
     _loadOrders();
-    // TODO(WEBSOCKET): WebSocketService ile gerçek zamanlı sipariş güncellemesi eklenecek
+    // Bağlantı hazır olunca /topic/restaurant/{id}/orders kanalına abone ol.
+    // Abonelik WebSocketService içinde "pending" olarak saklanır; bağlantı gelince
+    // otomatik aktive olur ve reconnect'te tekrar uygulanır.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _setupWebSocket());
+  }
+
+  @override
+  void dispose() {
+    if (_subscribedRestaurantId != null) {
+      WebSocketService.instance.unsubscribe(
+        '/topic/restaurant/$_subscribedRestaurantId/orders',
+      );
+    }
+    super.dispose();
+  }
+
+  void _setupWebSocket() {
+    final restaurantId = ref.read(authProvider).state.restaurantId;
+    if (restaurantId == null) {
+      debugPrint('[KITCHEN] restaurantId null, WS abonesi kurulamadı');
+      return;
+    }
+    _subscribedRestaurantId = restaurantId;
+    WebSocketService.instance.subscribeRestaurant(
+      restaurantId,
+      'orders',
+      _handleOrderEvent,
+    );
+    debugPrint('[KITCHEN] Abone olundu: /topic/restaurant/$restaurantId/orders');
+  }
+
+  void _handleOrderEvent(dynamic body) {
+    if (!mounted) return;
+    try {
+      final Map<String, dynamic> order = body is String
+          ? jsonDecode(body) as Map<String, dynamic>
+          : (body as Map).cast<String, dynamic>();
+
+      setState(() {
+        final idx = _orders.indexWhere((o) => o['id'] == order['id']);
+        final status = order['status'];
+        // READY/DELIVERED/CANCELLED → mutfak listesinden çıkar.
+        final terminal = status == 'READY' || status == 'DELIVERED' || status == 'CANCELLED';
+
+        if (terminal) {
+          if (idx != -1) _orders.removeAt(idx);
+        } else if (idx != -1) {
+          _orders[idx] = order;
+        } else {
+          _orders = [order, ..._orders];
+          _notifyNewOrder(order);
+        }
+      });
+    } catch (e) {
+      debugPrint('[KITCHEN] WS mesajı parse edilemedi: $e');
+    }
+  }
+
+  void _notifyNewOrder(Map<String, dynamic> order) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Yeni sipariş: Masa ${order['tableNumber'] ?? '?'}'),
+        backgroundColor: Colors.red.shade700,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   Future<void> _loadOrders() async {
     try {
       final res = await ApiClient.instance.get(ApiConstants.kitchenOrders);
+      if (!mounted) return;
       setState(() {
         _orders = List<dynamic>.from(res.data);
         _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() { _loading = false; });
     }
   }
@@ -99,12 +172,11 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
 
   Future<void> _startPreparing(dynamic orderId) async {
     await ApiClient.instance.post('/kitchen/orders/$orderId/start');
-    _loadOrders();
+    // WS event gelecek, ama yine de anında tazeleme için bir refresh yapabiliriz.
   }
 
   Future<void> _markReady(dynamic orderId) async {
     await ApiClient.instance.post('/kitchen/orders/$orderId/ready');
-    _loadOrders();
   }
 }
 
