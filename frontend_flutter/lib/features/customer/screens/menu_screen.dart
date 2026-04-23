@@ -1,11 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
+import '../../../core/providers/customer_session_provider.dart';
 import '../../../core/storage/local_storage.dart';
 
 // ─── Cart State ───────────────────────────────────────────────────────────────
@@ -97,9 +96,6 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   final _searchCtrl = TextEditingController();
   final _categoryScrollCtrl = ScrollController();
 
-  List<dynamic> _orders = [];
-  Timer? _ordersTimer;
-
   @override
   void initState() {
     super.initState();
@@ -110,27 +106,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   void dispose() {
     _searchCtrl.dispose();
     _categoryScrollCtrl.dispose();
-    _ordersTimer?.cancel();
     super.dispose();
-  }
-
-  Future<void> _loadOrders() async {
-    if (_sessionToken == null) return;
-    try {
-      final res = await ApiClient.instance
-          .get(ApiConstants.customerOrders, sessionToken: _sessionToken);
-      if (mounted) {
-        setState(() => _orders = List<dynamic>.from(res.data));
-      }
-    } catch (_) {}
-  }
-
-  void _startOrderPolling() {
-    _loadOrders();
-    _ordersTimer = Timer.periodic(
-      const Duration(seconds: 15),
-      (_) => _loadOrders(),
-    );
   }
 
   Future<void> _initSession() async {
@@ -153,13 +129,15 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
         _restaurantName = res.data['restaurantName'];
         _tableNumber = res.data['tableNumber'];
       }
+      if (_sessionToken != null) {
+        await ref.read(customerSessionProvider.notifier).setSession(_sessionToken!);
+      }
       final cached = LocalStorage.getCachedMenu(0);
       if (cached != null) {
         _parseMenu(cached);
       } else {
         await _loadMenu();
       }
-      _startOrderPolling();
     } catch (_) {
       if (mounted) context.go('/scan');
     }
@@ -231,6 +209,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final orders = ref.watch(customerSessionProvider.select((s) => s.orders));
     final cartCount =
         ref.watch(cartProvider.select((s) => s.fold(0, (a, i) => a + i.quantity)));
     final cartTotal =
@@ -249,7 +228,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                     Expanded(child: _buildList()),
                   ],
                 ),
-      bottomNavigationBar: _buildBottom(cartCount, cartTotal),
+      bottomNavigationBar: _buildBottom(cartCount, cartTotal, orders),
     );
   }
 
@@ -407,7 +386,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 
   // ── Alt Bar ────────────────────────────────────────────────────────────────
 
-  Widget _buildBottom(int cartCount, double cartTotal) {
+  Widget _buildBottom(int cartCount, double cartTotal, List<dynamic> orders) {
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -478,7 +457,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
             color: Colors.white,
             child: Row(
               children: [
-                Expanded(child: _buildOrderStatusButton()),
+                Expanded(child: _buildOrderStatusButton(orders)),
                 const VerticalDivider(indent: 10, endIndent: 10, width: 1),
                 Expanded(
                   child: TextButton.icon(
@@ -503,8 +482,8 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     );
   }
 
-  Widget _buildOrderStatusButton() {
-    if (_orders.isEmpty) {
+  Widget _buildOrderStatusButton(List<dynamic> orders) {
+    if (orders.isEmpty) {
       return TextButton.icon(
         icon: const Icon(Icons.receipt_outlined, size: 20),
         label: const Text('Siparişler'),
@@ -514,7 +493,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 
     // En öncelikli aktif durumu bul: READY > PREPARING > PENDING
     const priority = ['READY', 'PREPARING', 'PENDING'];
-    final active = _orders.where((o) {
+    final active = orders.where((o) {
       final s = o['status'] as String?;
       return s != 'DELIVERED' && s != 'CANCELLED';
     }).toList();
@@ -532,7 +511,7 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
                   : b);
     }
 
-    final totalAmount = _orders
+    final totalAmount = orders
         .where((o) => o['status'] != 'CANCELLED')
         .fold<double>(
             0, (s, o) => s + ((o['totalAmount'] as num?)?.toDouble() ?? 0));
@@ -574,11 +553,15 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
   }
 
   void _showOrdersSheet() {
+    final orders = ref.read(customerSessionProvider).orders;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _OrdersSheet(orders: _orders, onRefresh: _loadOrders),
+      builder: (_) => _OrdersSheet(
+        orders: orders,
+        onRefresh: () => ref.read(customerSessionProvider.notifier).refreshOrders(),
+      ),
     );
   }
 }

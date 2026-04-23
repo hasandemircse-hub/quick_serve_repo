@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
+import '../../../core/providers/customer_session_provider.dart';
 import '../../../core/storage/local_storage.dart';
 
-class PaymentScreen extends StatefulWidget {
+class PaymentScreen extends ConsumerStatefulWidget {
   const PaymentScreen({super.key});
 
   @override
-  State<PaymentScreen> createState() => _PaymentScreenState();
+  ConsumerState<PaymentScreen> createState() => _PaymentScreenState();
 }
 
-class _PaymentScreenState extends State<PaymentScreen> {
+class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   String _selectedMethod = 'CASH';
   double _tip = 0;
-  double _total = 0;
-  List<dynamic> _orders = [];
   bool _loadingOrders = true;
   bool _paying = false;
   String? _sessionToken;
@@ -45,25 +45,33 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final res = await ApiClient.instance
           .get(ApiConstants.customerOrders, sessionToken: _sessionToken);
       final orders = List<dynamic>.from(res.data);
-      final total = orders
-          .where((o) => o['status'] != 'CANCELLED')
-          .fold<double>(
-              0, (s, o) => s + ((o['totalAmount'] as num?)?.toDouble() ?? 0));
+      await ref.read(customerSessionProvider.notifier).setSession(_sessionToken!);
       setState(() {
-        _orders = orders;
-        _total = total;
         _loadingOrders = false;
       });
+      // İlk yükte provider verisini de senkronlamak için REST sonucunu bir kez refresh et.
+      if (orders.isNotEmpty) {
+        await ref.read(customerSessionProvider.notifier).refreshOrders();
+      }
     } catch (_) {
       setState(() => _loadingOrders = false);
     }
   }
 
-  double get _tipAmount => _total * _tip / 100;
-  double get _grandTotal => _total + _tipAmount;
+  double _computeTotal(List<dynamic> orders) {
+    return orders
+        .where((o) => o['status'] != 'CANCELLED')
+        .fold<double>(
+            0, (s, o) => s + ((o['totalAmount'] as num?)?.toDouble() ?? 0));
+  }
+
+  double _tipAmount(double total) => total * _tip / 100;
+  double _grandTotal(double total) => total + _tipAmount(total);
 
   @override
   Widget build(BuildContext context) {
+    final orders = ref.watch(customerSessionProvider.select((s) => s.orders));
+    final total = _computeTotal(orders);
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7),
       appBar: AppBar(title: const Text('Ödeme')),
@@ -74,17 +82,17 @@ class _PaymentScreenState extends State<PaymentScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildSummaryCard(),
+                  _buildSummaryCard(total),
                   const SizedBox(height: 16),
-                  _buildOrderList(),
+                  _buildOrderList(orders),
                   const SizedBox(height: 16),
                   _buildTipSection(),
                   const SizedBox(height: 16),
                   _buildPaymentMethodSection(),
                   const SizedBox(height: 16),
-                  _buildSplitButton(),
+                  _buildSplitButton(total),
                   const SizedBox(height: 24),
-                  _buildPayButton(),
+                  _buildPayButton(total),
                   const SizedBox(height: 16),
                 ],
               ),
@@ -94,7 +102,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ── Tutar Özeti ─────────────────────────────────────────────────────────────
 
-  Widget _buildSummaryCard() {
+  Widget _buildSummaryCard(double total) {
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       child: Padding(
@@ -102,11 +110,11 @@ class _PaymentScreenState extends State<PaymentScreen> {
         child: Column(
           children: [
             _summaryRow('Yemek Tutarı',
-                '₺${_total.toStringAsFixed(2)}', null),
+                '₺${total.toStringAsFixed(2)}', null),
             if (_tip > 0) ...[
               const SizedBox(height: 6),
               _summaryRow('Bahşiş (%${_tip.toInt()})',
-                  '₺${_tipAmount.toStringAsFixed(2)}', Colors.green),
+                  '₺${_tipAmount(total).toStringAsFixed(2)}', Colors.green),
             ],
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 10),
@@ -114,7 +122,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
             _summaryRow(
               'Toplam',
-              '₺${_grandTotal.toStringAsFixed(2)}',
+              '₺${_grandTotal(total).toStringAsFixed(2)}',
               Theme.of(context).colorScheme.primary,
               bold: true,
               fontSize: 18,
@@ -145,9 +153,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ── Sipariş Listesi ──────────────────────────────────────────────────────────
 
-  Widget _buildOrderList() {
+  Widget _buildOrderList(List<dynamic> orders) {
     final active =
-        _orders.where((o) => o['status'] != 'CANCELLED').toList();
+        orders.where((o) => o['status'] != 'CANCELLED').toList();
     if (active.isEmpty) {
       return const Card(
         child: Padding(
@@ -317,13 +325,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ── Hesabı Böl ───────────────────────────────────────────────────────────────
 
-  Widget _buildSplitButton() {
+  Widget _buildSplitButton(double total) {
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(
         icon: const Icon(Icons.people_outline),
         label: const Text('Hesabı Böl'),
-        onPressed: () => _showSplitDialog(context),
+        onPressed: () => _showSplitDialog(context, total),
         style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 12)),
       ),
@@ -332,14 +340,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ── Ödeme Butonu ─────────────────────────────────────────────────────────────
 
-  Widget _buildPayButton() {
+  Widget _buildPayButton(double total) {
     final isCard = _selectedMethod == 'CREDIT_CARD' ||
         _selectedMethod == 'DEBIT_CARD';
     return SizedBox(
       width: double.infinity,
       height: 52,
       child: FilledButton(
-        onPressed: (_paying || _total == 0) ? null : _pay,
+        onPressed: (_paying || total == 0) ? null : () => _pay(total),
         child: _paying
             ? const SizedBox(
                 width: 22,
@@ -357,7 +365,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ── Ödeme İşlemi ─────────────────────────────────────────────────────────────
 
-  Future<void> _pay() async {
+  Future<void> _pay(double total) async {
     setState(() => _paying = true);
     try {
       final isCard = _selectedMethod == 'CREDIT_CARD' ||
@@ -367,8 +375,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ApiConstants.customerPaymentsInit,
           data: {
             'method': _selectedMethod,
-            'amount': _grandTotal,
-            'tipAmount': _tipAmount,
+            'amount': _grandTotal(total),
+            'tipAmount': _tipAmount(total),
           },
           sessionToken: _sessionToken,
         );
@@ -395,7 +403,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ── Hesabı Böl Dialog ────────────────────────────────────────────────────────
 
-  void _showSplitDialog(BuildContext context) {
+  void _showSplitDialog(BuildContext context, double total) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -404,14 +412,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Toplam: ₺${_grandTotal.toStringAsFixed(2)}'),
+            Text('Toplam: ₺${_grandTotal(total).toStringAsFixed(2)}'),
             const SizedBox(height: 12),
             const Text('Kaç kişiye bölmek istiyorsunuz?'),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               children: [2, 3, 4, 5].map((n) {
-                final perPerson = _grandTotal / n;
+                final perPerson = _grandTotal(total) / n;
                 return ElevatedButton(
                   onPressed: () => Navigator.pop(ctx),
                   child: Text(

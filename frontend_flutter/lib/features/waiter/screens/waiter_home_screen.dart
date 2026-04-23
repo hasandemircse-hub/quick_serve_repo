@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/network/websocket_service.dart';
 
 class WaiterHomeScreen extends ConsumerStatefulWidget {
   const WaiterHomeScreen({super.key});
@@ -19,12 +22,69 @@ class _WaiterHomeScreenState extends ConsumerState<WaiterHomeScreen>
   List<dynamic> _calls = [];
   List<dynamic> _readyOrders = [];
   bool _loading = true;
+  int? _restaurantId;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _loadData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initRealtime();
+    });
+  }
+
+  void _initRealtime() {
+    final id = ref.read(authProvider).state.restaurantId;
+    if (id == null) return;
+    _restaurantId = id;
+    WebSocketService.instance.subscribeRestaurant(
+      id,
+      'orders',
+      _handleOrderEvent,
+    );
+  }
+
+  void _handleOrderEvent(dynamic payload) {
+    if (!mounted || payload is! String) return;
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is! Map<String, dynamic>) return;
+
+      final orderId = decoded['id'];
+      final status = decoded['status'] as String?;
+      if (orderId == null || status == null) return;
+
+      setState(() {
+        final current = List<dynamic>.from(_readyOrders);
+        final idx = current.indexWhere((o) => o['id'] == orderId);
+
+        if (status == 'READY') {
+          if (idx >= 0) {
+            current[idx] = decoded;
+          } else {
+            current.insert(0, decoded);
+          }
+        } else {
+          if (idx >= 0) {
+            current.removeAt(idx);
+          }
+        }
+        _readyOrders = current;
+      });
+
+      if (status == 'READY') {
+        final tableNumber = decoded['tableNumber']?.toString() ?? '?';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Masa $tableNumber siparişi hazır: #$orderId'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (_) {
+      // parse hatalarında sessiz geç
+    }
   }
 
   Future<void> _loadData() async {
@@ -123,6 +183,10 @@ class _WaiterHomeScreenState extends ConsumerState<WaiterHomeScreen>
 
   @override
   void dispose() {
+    final id = _restaurantId;
+    if (id != null) {
+      WebSocketService.instance.unsubscribe('/topic/restaurant/$id/orders');
+    }
     _tabController.dispose();
     super.dispose();
   }

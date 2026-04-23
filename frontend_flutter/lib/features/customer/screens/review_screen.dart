@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
+import '../../../core/providers/customer_session_provider.dart';
 import '../../../core/storage/local_storage.dart';
 
 class ReviewScreen extends StatefulWidget {
@@ -37,6 +39,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
           data: {'rating': _rating, 'comment': _commentCtrl.text.trim().isEmpty ? null : _commentCtrl.text.trim()},
           sessionToken: sessionToken);
       await LocalStorage.clearSessionToken();
+      if (!mounted) return;
+      ProviderScope.containerOf(context, listen: false)
+          .read(customerSessionProvider.notifier)
+          .clearSession();
       setState(() { _submitted = true; });
     } catch (e) {
       if (mounted) {
