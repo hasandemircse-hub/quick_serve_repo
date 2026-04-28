@@ -33,6 +33,10 @@ public class RestaurantTable {
     @Column(name = "qr_token", unique = true, length = 100)
     private String qrToken;
 
+    // QR yenilemenin "Geri Al" desteği için bir önceki token saklanır.
+    @Column(name = "previous_qr_token", length = 100)
+    private String previousQrToken;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
@@ -54,6 +58,11 @@ public class RestaurantTable {
     // İç/dış alan, teras vb.
     @Column(name = "zone", length = 50)
     private String zone;
+
+    // Masa grubu (salon, teras, bahçe vb.) — opsiyonel.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "table_group_id")
+    private TableGroup tableGroup;
 
     // Uzun süre bekleyen masa için son uyarı zamanı
     @Column(name = "last_alert_at")

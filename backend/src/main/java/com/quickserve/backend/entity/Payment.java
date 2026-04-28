@@ -71,6 +71,9 @@ public class Payment {
     @Column(name = "failure_reason", length = 500)
     private String failureReason;
 
+    @Column(name = "note", length = 500)
+    private String note;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

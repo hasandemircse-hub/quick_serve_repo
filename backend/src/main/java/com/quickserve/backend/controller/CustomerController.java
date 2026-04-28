@@ -4,17 +4,21 @@ import com.quickserve.backend.dto.menu.MenuItemResponse;
 import com.quickserve.backend.dto.order.OrderRequest;
 import com.quickserve.backend.dto.order.OrderResponse;
 import com.quickserve.backend.dto.payment.BillSplitRequest;
+import com.quickserve.backend.dto.payment.PayableItemResponse;
 import com.quickserve.backend.dto.payment.PaymentRequest;
 import com.quickserve.backend.dto.payment.PaymentResponse;
+import com.quickserve.backend.dto.payment.SessionFinancialSummaryResponse;
 import com.quickserve.backend.dto.review.ReviewRequest;
 import com.quickserve.backend.dto.review.ReviewResponse;
 import com.quickserve.backend.dto.session.SessionResponse;
 import com.quickserve.backend.enums.WaiterCallType;
+import com.quickserve.backend.exception.BusinessException;
 import com.quickserve.backend.service.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,6 +34,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Tag(name = "Customer", description = "Müşteri ekranı - QR token ile erişilir")
 public class CustomerController {
+
+    @Value("${app.customer-payment-simulation-enabled:false}")
+    private boolean customerPaymentSimulationEnabled;
 
     private final TableService tableService;
     private final MenuService menuService;
@@ -109,6 +116,20 @@ public class CustomerController {
         return ResponseEntity.ok(paymentService.getSessionPayments(token));
     }
 
+    @GetMapping("/payments/financial-summary")
+    @Operation(summary = "Oturum finansal özeti")
+    public ResponseEntity<SessionFinancialSummaryResponse> getFinancialSummary(
+            @RequestHeader("X-Session-Token") String token) {
+        return ResponseEntity.ok(paymentService.getSessionFinancialSummary(token));
+    }
+
+    @GetMapping("/payments/payable-items")
+    @Operation(summary = "Ödenebilir sipariş kalemleri")
+    public ResponseEntity<List<PayableItemResponse>> getPayableItems(
+            @RequestHeader("X-Session-Token") String token) {
+        return ResponseEntity.ok(paymentService.getSessionPayableItems(token));
+    }
+
     @PostMapping("/payments/iyzico/init")
     @Operation(summary = "İyzico ödeme sayfası başlat (URL döner)")
     public ResponseEntity<Map<String, String>> initIyzicoPayment(
@@ -116,6 +137,18 @@ public class CustomerController {
             @Valid @RequestBody PaymentRequest request) {
         String url = paymentService.initIyzicoCheckout(token, request);
         return ResponseEntity.ok(Map.of("paymentUrl", url));
+    }
+
+    @PostMapping("/payments/simulate-complete")
+    @Operation(summary = "[TEST] Ödemeyi tamamlanmış olarak kaydet (allocations). Sadece app.customer-payment-simulation-enabled=true")
+    public ResponseEntity<PaymentResponse> simulatePaymentComplete(
+            @RequestHeader("X-Session-Token") String token,
+            @Valid @RequestBody PaymentRequest request) {
+        if (!customerPaymentSimulationEnabled) {
+            throw new BusinessException(
+                    "Müşteri ödeme simülasyonu kapalı. Backend: app.customer-payment-simulation-enabled=true");
+        }
+        return ResponseEntity.ok(paymentService.simulateCustomerPayment(token, request));
     }
 
     @PostMapping("/payments/split")

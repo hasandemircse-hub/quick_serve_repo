@@ -134,6 +134,14 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
+    public List<OrderResponse> getSessionOrdersBySessionId(Long sessionId) {
+        TableSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Oturum bulunamadı"));
+        return orderRepository.findByTableSessionIdOrderByCreatedAtDesc(session.getId())
+                .stream().map(this::toDto).toList();
+    }
+
+    @Transactional(readOnly = true)
     public List<OrderResponse> getKitchenOrders(Long restaurantId) {
         return orderRepository.findKitchenOrders(restaurantId)
                 .stream().map(this::toDto).toList();

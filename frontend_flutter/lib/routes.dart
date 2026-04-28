@@ -11,6 +11,7 @@ import 'features/kitchen/screens/kitchen_screen.dart';
 import 'features/admin/screens/admin_dashboard_screen.dart';
 import 'features/superadmin/screens/superadmin_screen.dart';
 import 'features/customer/screens/qr_scan_screen.dart';
+import 'features/cashier/screens/cashier_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authNotifier = ref.watch(authProvider.notifier);
@@ -24,7 +25,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final location = state.uri.path;
 
       // Protected routes that require authentication
-      final protectedRoutes = ['/admin', '/superadmin', '/waiter', '/kitchen'];
+      final protectedRoutes = ['/admin', '/superadmin', '/waiter', '/kitchen', '/cashier'];
 
       // Check if current route is protected
       final isProtectedRoute = protectedRoutes.any((route) => location.startsWith(route));
@@ -44,6 +45,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (location.startsWith('/waiter') && !authNotifier.hasRole('WAITER')) {
+        return '/login';
+      }
+
+      if (location.startsWith('/cashier') && !authNotifier.hasRole('WAITER')) {
         return '/login';
       }
 
@@ -112,6 +117,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/waiter',
         builder: (context, state) => const WaiterHomeScreen(),
+      ),
+      GoRoute(
+        path: '/cashier',
+        builder: (context, state) => const CashierScreen(),
       ),
 
       // ─── Mutfak ─────────────────────────────────────────────────────────

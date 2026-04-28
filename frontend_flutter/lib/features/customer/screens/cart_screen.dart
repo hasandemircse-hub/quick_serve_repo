@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
+import '../../../core/providers/customer_session_provider.dart';
 import '../../../core/storage/local_storage.dart';
 import 'menu_screen.dart';
 
@@ -11,6 +12,22 @@ class CartScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final sessionClosedMessage =
+        ref.watch(customerSessionProvider.select((s) => s.sessionClosedMessage));
+    if (sessionClosedMessage != null && sessionClosedMessage.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!context.mounted) return;
+        ref.read(customerSessionProvider.notifier).consumeSessionClosed();
+        await LocalStorage.clearSessionToken();
+        ref.read(customerSessionProvider.notifier).clearSession();
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(sessionClosedMessage)),
+        );
+        context.go('/scan');
+      });
+    }
+
     final cart = ref.watch(cartProvider);
     final total = cart.fold(0.0, (sum, i) => sum + i.price * i.quantity);
 

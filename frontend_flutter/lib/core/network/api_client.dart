@@ -69,3 +69,21 @@ class _ErrorInterceptor extends Interceptor {
     handler.next(err);
   }
 }
+
+/// Backend ErrorResponse.message'ını çekip kullanıcıya gösterilebilir hale getirir.
+/// Backend `{ "message": "..." }` döndürür; bağlantı hataları için fallback metin verilir.
+String apiErrorMessage(Object error) {
+  if (error is DioException) {
+    final data = error.response?.data;
+    if (data is Map && data['message'] is String) {
+      final msg = (data['message'] as String).trim();
+      if (msg.isNotEmpty) return msg;
+    }
+    if (error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.receiveTimeout ||
+        error.type == DioExceptionType.connectionError) {
+      return 'Sunucuya ulaşılamadı';
+    }
+  }
+  return error.toString();
+}

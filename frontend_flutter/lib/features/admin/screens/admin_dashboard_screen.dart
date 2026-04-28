@@ -23,6 +23,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   List<dynamic> _tables = [];
+  List<dynamic> _tableGroups = [];
   List<dynamic> _staff = [];
   List<dynamic> _menuItems = [];
   List<dynamic> _categories = [];
@@ -68,12 +69,14 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
         ApiClient.instance.get(ApiConstants.adminStaff),
         ApiClient.instance.get(ApiConstants.adminMenuItems),
         ApiClient.instance.get(ApiConstants.adminMenuCategories),
+        ApiClient.instance.get(ApiConstants.adminTableGroups),
       ]);
       setState(() {
         _tables = List<dynamic>.from(results[0].data);
         _staff = List<dynamic>.from(results[1].data);
         _menuItems = List<dynamic>.from(results[2].data);
         _categories = List<dynamic>.from(results[3].data);
+        _tableGroups = List<dynamic>.from(results[4].data);
         _loading = false;
       });
     } catch (e) {
@@ -153,7 +156,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
           : TabBarView(
               controller: _tabController,
               children: [
-                _TablesView(tables: _tables, onRefresh: () => _loadData()),
+                _TablesView(
+                    tables: _tables,
+                    groups: _tableGroups,
+                    onRefresh: () => _loadData()),
                 _MenuView(
                     items: _menuItems,
                     categories: _categories,
@@ -180,25 +186,230 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
 
 // ─── Masa Yönetimi ────────────────────────────────────────────────────────────
 
-class _TablesView extends StatelessWidget {
+class _TablesView extends StatefulWidget {
   final List<dynamic> tables;
+  final List<dynamic> groups;
   final VoidCallback onRefresh;
-  const _TablesView({required this.tables, required this.onRefresh});
+  const _TablesView({
+    required this.tables,
+    required this.groups,
+    required this.onRefresh,
+  });
+
+  @override
+  State<_TablesView> createState() => _TablesViewState();
+}
+
+class _TablesViewState extends State<_TablesView> {
+  // null  → "Tüm Masalar"
+  // -1    → "Gruplandırılmamış"
+  // diğer → grup id'si (int)
+  Object? _selection = const _AllTablesSentinel();
+
+  static const Object _allTables = _AllTablesSentinel();
+  static const Object _ungrouped = _UngroupedSentinel();
+
+  List<dynamic> _localGroups = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _localGroups = List.from(widget.groups);
+  }
+
+  @override
+  void didUpdateWidget(covariant _TablesView old) {
+    super.didUpdateWidget(old);
+    if (widget.groups != old.groups) {
+      _localGroups = List.from(widget.groups);
+      // Seçili grup silindiyse "Tüm Masalar"a düş.
+      if (_selection is int) {
+        final id = _selection as int;
+        if (!_localGroups.any((g) => g['id'] == id)) {
+          _selection = _allTables;
+        }
+      }
+    }
+  }
+
+  List<dynamic> _tablesForSelection() {
+    if (_selection == _allTables) return widget.tables;
+    if (_selection == _ungrouped) {
+      return widget.tables.where((t) => t['tableGroupId'] == null).toList();
+    }
+    final id = _selection as int;
+    return widget.tables.where((t) => t['tableGroupId'] == id).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
+        SizedBox(width: 210, child: _buildGroupPanel(context)),
+        const VerticalDivider(width: 1, thickness: 1),
+        Expanded(child: _buildTablesPanel(context)),
+      ],
+    );
+  }
+
+  // ── Sol Panel: Grup Listesi ──────────────────────────────────────────────
+
+  Widget _buildGroupPanel(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                  '${tables.where((t) => t['status'] == 'OCCUPIED').length} Dolu / ${tables.length} Toplam'),
+              const Text('Masa Grupları',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              IconButton(
+                icon: const Icon(Icons.add, size: 20),
+                tooltip: 'Grup Ekle',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () => _showGroupDialog(context),
+              ),
+            ],
+          ),
+        ),
+        // "Tüm Masalar" sabit girişi
+        ListTile(
+          dense: true,
+          selected: _selection == _allTables,
+          selectedTileColor:
+              Theme.of(context).colorScheme.primaryContainer,
+          leading: const Icon(Icons.grid_view, size: 18),
+          title: Text('Tüm Masalar (${widget.tables.length})',
+              style: const TextStyle(fontSize: 13)),
+          onTap: () => setState(() => _selection = _allTables),
+        ),
+        // "Gruplandırılmamış" sabit girişi (sadece varsa)
+        if (widget.tables.any((t) => t['tableGroupId'] == null))
+          ListTile(
+            dense: true,
+            selected: _selection == _ungrouped,
+            selectedTileColor:
+                Theme.of(context).colorScheme.primaryContainer,
+            leading: const Icon(Icons.help_outline, size: 18),
+            title: Text(
+              'Gruplandırılmamış '
+              '(${widget.tables.where((t) => t['tableGroupId'] == null).length})',
+              style: const TextStyle(fontSize: 13),
+            ),
+            onTap: () => setState(() => _selection = _ungrouped),
+          ),
+        const Divider(height: 1),
+        Expanded(
+          child: _localGroups.isEmpty
+              ? const Center(
+                  child: Text('Grup yok',
+                      style: TextStyle(color: Colors.grey, fontSize: 12)))
+              : ReorderableListView.builder(
+                  buildDefaultDragHandles: false,
+                  padding: EdgeInsets.zero,
+                  onReorder: _reorderGroups,
+                  itemCount: _localGroups.length,
+                  itemBuilder: (ctx, i) {
+                    final g = _localGroups[i];
+                    final id = g['id'];
+                    final isSelected = _selection == id;
+                    final count = widget.tables
+                        .where((t) => t['tableGroupId'] == id)
+                        .length;
+                    return ListTile(
+                      key: ValueKey(id),
+                      dense: true,
+                      selected: isSelected,
+                      selectedTileColor: Theme.of(context)
+                          .colorScheme
+                          .primaryContainer,
+                      leading: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ReorderableDragStartListener(
+                            index: i,
+                            child: const Icon(Icons.drag_handle,
+                                size: 18, color: Colors.grey),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.layers, size: 14),
+                        ],
+                      ),
+                      title: Text(
+                        '${g['name']} ($count)',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      trailing: PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert, size: 16),
+                        padding: EdgeInsets.zero,
+                        onSelected: (action) =>
+                            _handleGroupAction(context, action, g),
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                              value: 'edit',
+                              child: Text('Yeniden Adlandır')),
+                          PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Sil',
+                                  style: TextStyle(color: Colors.red))),
+                        ],
+                      ),
+                      onTap: () => setState(() => _selection = id),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  // ── Sağ Panel: Seçili Grubun Masaları ────────────────────────────────────
+
+  Widget _buildTablesPanel(BuildContext context) {
+    final tables = _tablesForSelection();
+    final occupied =
+        tables.where((t) => t['status'] == 'OCCUPIED').length;
+    final title = _selection == _allTables
+        ? 'Tüm Masalar'
+        : _selection == _ungrouped
+            ? 'Gruplandırılmamış'
+            : (_localGroups.firstWhere(
+                    (g) => g['id'] == _selection,
+                    orElse: () => {'name': ''})['name'] as String? ??
+                '');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: Row(
+            children: [
+              Expanded(
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14)),
+                    Text('$occupied dolu / ${tables.length} toplam',
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.grey)),
+                  ],
+                ),
+              ),
               FilledButton.icon(
-                icon: const Icon(Icons.add),
+                icon: const Icon(Icons.add, size: 16),
                 label: const Text('Masa Ekle'),
+                style: FilledButton.styleFrom(
+                    visualDensity: VisualDensity.compact),
                 onPressed: () => _showAddTableDialog(context),
               ),
             ],
@@ -207,10 +418,10 @@ class _TablesView extends StatelessWidget {
         Expanded(
           child: tables.isEmpty
               ? const Center(
-                  child: Text('Henüz masa yok',
+                  child: Text('Bu grupta masa yok',
                       style: TextStyle(color: Colors.grey)))
               : GridView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.all(12),
                   gridDelegate:
                       const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 3,
@@ -248,6 +459,12 @@ class _TablesView extends StatelessWidget {
                               Text('${table['capacity']} kişi',
                                   style: const TextStyle(
                                       fontSize: 10, color: Colors.grey)),
+                            if (_selection == _allTables &&
+                                table['tableGroupName'] != null)
+                              Text(table['tableGroupName'],
+                                  style: const TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.blueGrey)),
                           ],
                         ),
                       ),
@@ -258,6 +475,141 @@ class _TablesView extends StatelessWidget {
       ],
     );
   }
+
+  // ── Grup CRUD ────────────────────────────────────────────────────────────
+
+  void _handleGroupAction(BuildContext context, String action, dynamic g) {
+    switch (action) {
+      case 'edit':
+        _showGroupDialog(context, existing: g);
+      case 'delete':
+        _confirmDeleteGroup(context, g);
+    }
+  }
+
+  Future<void> _reorderGroups(int oldIndex, int newIndex) async {
+    if (newIndex > oldIndex) newIndex--;
+    setState(() {
+      final g = _localGroups.removeAt(oldIndex);
+      _localGroups.insert(newIndex, g);
+    });
+    final body = _localGroups
+        .asMap()
+        .entries
+        .map((e) => {'id': e.value['id'], 'displayOrder': e.key})
+        .toList();
+    try {
+      await ApiClient.instance
+          .put(ApiConstants.adminTableGroupsReorder, data: body);
+      widget.onRefresh();
+    } catch (_) {
+      widget.onRefresh();
+    }
+  }
+
+  void _showGroupDialog(BuildContext context, {dynamic existing}) {
+    final isEdit = existing != null;
+    final formKey = GlobalKey<FormState>();
+    final nameCtrl =
+        TextEditingController(text: existing?['name'] as String? ?? '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isEdit ? 'Grup Düzenle' : 'Yeni Masa Grubu'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: nameCtrl,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Grup Adı *',
+              hintText: 'örn: Salon, Teras, Bahçe',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.layers),
+            ),
+            textCapitalization: TextCapitalization.sentences,
+            validator: (v) => (v == null || v.trim().isEmpty)
+                ? 'Grup adı zorunludur'
+                : null,
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('İptal')),
+          FilledButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              final nav = Navigator.of(ctx);
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                if (isEdit) {
+                  await ApiClient.instance.put(
+                    '${ApiConstants.adminTableGroups}/${existing['id']}',
+                    data: {'name': nameCtrl.text.trim()},
+                  );
+                } else {
+                  await ApiClient.instance.post(
+                    ApiConstants.adminTableGroups,
+                    data: {'name': nameCtrl.text.trim()},
+                  );
+                }
+                nav.pop();
+                widget.onRefresh();
+              } catch (e) {
+                messenger.showSnackBar(SnackBar(
+                    content: Text(apiErrorMessage(e)),
+                    backgroundColor: Colors.red));
+              }
+            },
+            child: Text(isEdit ? 'Güncelle' : 'Oluştur'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteGroup(
+      BuildContext context, dynamic g) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Grubu Sil'),
+        content: Text(
+            '"${g['name']}" grubunu silmek istediğinizden emin misiniz?\n\n'
+            'Bu gruba bağlı masalar silinmez, "Gruplandırılmamış" listesine düşer.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('İptal')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ApiClient.instance
+          .delete('${ApiConstants.adminTableGroups}/${g['id']}');
+      if (_selection == g['id']) {
+        setState(() => _selection = _allTables);
+      }
+      widget.onRefresh();
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('$e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  // ── Masa CRUD ────────────────────────────────────────────────────────────
 
   void _showTableMenu(BuildContext context, dynamic table) {
     showModalBottomSheet(
@@ -277,16 +629,34 @@ class _TablesView extends StatelessWidget {
             },
           ),
           ListTile(
+            leading: const Icon(Icons.layers),
+            title: const Text('Grubu Değiştir'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _showAssignGroupDialog(context, table);
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.refresh),
             title: const Text('QR Kodu Yenile'),
             onTap: () {
               Navigator.pop(ctx);
-              ApiClient.instance
-                  .post(
-                      '${ApiConstants.adminTables}/${table['id']}/regenerate-qr')
-                  .then((_) => onRefresh());
+              _regenerateQr(context, table);
             },
           ),
+          if (table['hasPreviousQr'] == true)
+            ListTile(
+              leading: const Icon(Icons.undo, color: Colors.blue),
+              title: const Text('Önceki QR\'a Geri Dön',
+                  style: TextStyle(color: Colors.blue)),
+              subtitle: const Text(
+                  'Son yenilemeyi geri alır',
+                  style: TextStyle(fontSize: 12)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _undoRegenerateQr(context, table);
+              },
+            ),
           ListTile(
             leading: const Icon(Icons.delete, color: Colors.red),
             title: const Text('Masayı Sil',
@@ -295,10 +665,154 @@ class _TablesView extends StatelessWidget {
               Navigator.pop(ctx);
               ApiClient.instance
                   .delete('${ApiConstants.adminTables}/${table['id']}')
-                  .then((_) => onRefresh());
+                  .then((_) => widget.onRefresh());
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _regenerateQr(BuildContext context, dynamic table) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ApiClient.instance
+          .post('${ApiConstants.adminTables}/${table['id']}/regenerate-qr');
+      widget.onRefresh();
+      if (!mounted) return;
+      messenger.clearSnackBars();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Masa ${table['tableNumber']} için QR yenilendi'),
+          duration: const Duration(seconds: 8),
+          action: SnackBarAction(
+            label: 'GERİ AL',
+            onPressed: () async {
+              try {
+                await ApiClient.instance.post(
+                    '${ApiConstants.adminTables}/${table['id']}/undo-regenerate-qr');
+                widget.onRefresh();
+              } catch (e) {
+                if (!mounted) return;
+                messenger.showSnackBar(SnackBar(
+                  content: Text(apiErrorMessage(e)),
+                  backgroundColor: Colors.red,
+                ));
+              }
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(
+        content: Text(apiErrorMessage(e)),
+        backgroundColor: Colors.red,
+      ));
+    }
+  }
+
+  Future<void> _undoRegenerateQr(BuildContext context, dynamic table) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Önceki QR\'a Geri Dön'),
+        content: Text(
+            'Masa ${table['tableNumber']} için son yenileme geri alınacak. '
+            'Yeni basılan QR geçersiz hale gelir.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('İptal')),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Geri Dön'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ApiClient.instance.post(
+          '${ApiConstants.adminTables}/${table['id']}/undo-regenerate-qr');
+      widget.onRefresh();
+      if (!mounted) return;
+      messenger.clearSnackBars();
+      messenger.showSnackBar(SnackBar(
+        content: Text('Masa ${table['tableNumber']} önceki QR\'a döndürüldü'),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(
+        content: Text(apiErrorMessage(e)),
+        backgroundColor: Colors.red,
+      ));
+    }
+  }
+
+  void _showAssignGroupDialog(BuildContext context, dynamic table) {
+    Object? selected = table['tableGroupId'];
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: Text('Masa ${table['tableNumber']} → Grup'),
+          content: SizedBox(
+            width: 320,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<Object?>(
+                  dense: true,
+                  value: null,
+                  // ignore: deprecated_member_use
+                  groupValue: selected,
+                  // ignore: deprecated_member_use
+                  onChanged: (v) => setS(() => selected = v),
+                  title: const Text('Gruplandırılmamış'),
+                ),
+                ..._localGroups.map((g) => RadioListTile<Object?>(
+                      dense: true,
+                      value: g['id'],
+                      // ignore: deprecated_member_use
+                      groupValue: selected,
+                      // ignore: deprecated_member_use
+                      onChanged: (v) => setS(() => selected = v),
+                      title: Text(g['name'] as String? ?? ''),
+                    )),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('İptal')),
+            FilledButton(
+              onPressed: () async {
+                final nav = Navigator.of(ctx);
+                final messenger = ScaffoldMessenger.of(context);
+                try {
+                  await ApiClient.instance.put(
+                    '${ApiConstants.adminTables}/${table['id']}',
+                    data: {
+                      'tableNumber': table['tableNumber'],
+                      'capacity': table['capacity'],
+                      'tableGroupId': selected,
+                    },
+                  );
+                  nav.pop();
+                  widget.onRefresh();
+                } catch (e) {
+                  messenger.showSnackBar(SnackBar(
+                      content: Text(apiErrorMessage(e)),
+                      backgroundColor: Colors.red));
+                }
+              },
+              child: const Text('Kaydet'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -307,94 +821,133 @@ class _TablesView extends StatelessWidget {
     final formKey = GlobalKey<FormState>();
     final tableNumberCtrl = TextEditingController();
     final capacityCtrl = TextEditingController(text: '4');
+    // Kullanıcı bir grup seçmişse o grupla başlasın.
+    Object? selectedGroupId =
+        _selection is int ? _selection : null;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Yeni Masa'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: tableNumberCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Masa Numarası *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.table_restaurant),
-                  hintText: 'örn: 1, 2, A1',
-                ),
-                textCapitalization: TextCapitalization.characters,
-                inputFormatters: [
-                  LengthLimitingTextInputFormatter(10),
-                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9]')),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: const Text('Yeni Masa'),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: tableNumberCtrl,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Masa Numarası *',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.table_restaurant),
+                      hintText: 'örn: 1, 2, A1',
+                    ),
+                    textCapitalization: TextCapitalization.characters,
+                    inputFormatters: [
+                      LengthLimitingTextInputFormatter(10),
+                      FilteringTextInputFormatter.allow(
+                          RegExp(r'[a-zA-Z0-9]')),
+                    ],
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Masa numarası zorunludur';
+                      }
+                      if (v.trim().length > 10) {
+                        return 'En fazla 10 karakter olabilir';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: capacityCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Kapasite (Kişi Sayısı) *',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.people_outline),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(2),
+                    ],
+                    validator: (v) {
+                      if (v == null || v.isEmpty) {
+                        return 'Kapasite zorunludur';
+                      }
+                      final n = int.tryParse(v);
+                      if (n == null) return 'Geçerli bir sayı girin';
+                      if (n < 1) return 'En az 1 kişi olmalıdır';
+                      if (n > 50) return 'En fazla 50 kişi olabilir';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<Object?>(
+                    initialValue: selectedGroupId,
+                    decoration: const InputDecoration(
+                      labelText: 'Grup',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.layers),
+                    ),
+                    items: [
+                      const DropdownMenuItem<Object?>(
+                          value: null, child: Text('Gruplandırılmamış')),
+                      ..._localGroups.map((g) => DropdownMenuItem<Object?>(
+                            value: g['id'],
+                            child: Text(g['name'] as String? ?? ''),
+                          )),
+                    ],
+                    onChanged: (val) =>
+                        setS(() => selectedGroupId = val),
+                  ),
                 ],
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) {
-                    return 'Masa numarası zorunludur';
-                  }
-                  if (v.trim().length > 10) {
-                    return 'En fazla 10 karakter olabilir';
-                  }
-                  return null;
-                },
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: capacityCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Kapasite (Kişi Sayısı) *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.people_outline),
-                ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(2),
-                ],
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Kapasite zorunludur';
-                  final n = int.tryParse(v);
-                  if (n == null) return 'Geçerli bir sayı girin';
-                  if (n < 1) return 'En az 1 kişi olmalıdır';
-                  if (n > 50) return 'En fazla 50 kişi olabilir';
-                  return null;
-                },
-              ),
-            ],
+            ),
           ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('İptal')),
+            FilledButton(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+                final nav = Navigator.of(ctx);
+                final messenger = ScaffoldMessenger.of(context);
+                try {
+                  await ApiClient.instance.post(ApiConstants.adminTables,
+                      data: {
+                        'tableNumber': tableNumberCtrl.text.trim(),
+                        'capacity': int.parse(capacityCtrl.text),
+                        'tableGroupId': selectedGroupId,
+                      });
+                  nav.pop();
+                  widget.onRefresh();
+                } catch (e) {
+                  messenger.showSnackBar(SnackBar(
+                    content: Text(apiErrorMessage(e)),
+                    backgroundColor: Colors.red,
+                  ));
+                }
+              },
+              child: const Text('Ekle'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('İptal')),
-          FilledButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              final nav = Navigator.of(ctx);
-              final messenger = ScaffoldMessenger.of(context);
-              try {
-                await ApiClient.instance.post(ApiConstants.adminTables,
-                    data: {
-                      'tableNumber': tableNumberCtrl.text.trim(),
-                      'capacity': int.parse(capacityCtrl.text),
-                    });
-                nav.pop();
-                onRefresh();
-              } catch (e) {
-                messenger.showSnackBar(SnackBar(
-                  content: Text('Hata: $e'),
-                  backgroundColor: Colors.red,
-                ));
-              }
-            },
-            child: const Text('Ekle'),
-          ),
-        ],
       ),
     );
   }
+}
+
+class _AllTablesSentinel {
+  const _AllTablesSentinel();
+}
+
+class _UngroupedSentinel {
+  const _UngroupedSentinel();
 }
 
 // ─── Menü Yönetimi ────────────────────────────────────────────────────────────
@@ -810,7 +1363,7 @@ class _MenuViewState extends State<_MenuView> {
       if (mounted) {
         messenger.showSnackBar(
           SnackBar(
-              content: Text('Hata: $e'),
+              content: Text(apiErrorMessage(e)),
               backgroundColor: Colors.red),
         );
       }
@@ -910,7 +1463,7 @@ class _MenuViewState extends State<_MenuView> {
               } catch (e) {
                 messenger.showSnackBar(
                   SnackBar(
-                      content: Text('Hata: $e'),
+                      content: Text(apiErrorMessage(e)),
                       backgroundColor: Colors.red),
                 );
               }
@@ -941,7 +1494,7 @@ class _MenuViewState extends State<_MenuView> {
       if (mounted) {
         messenger.showSnackBar(
           SnackBar(
-              content: Text('Hata: $e'),
+              content: Text(apiErrorMessage(e)),
               backgroundColor: Colors.red),
         );
       }
@@ -978,7 +1531,7 @@ class _MenuViewState extends State<_MenuView> {
       if (mounted) {
         messenger.showSnackBar(
           SnackBar(
-              content: Text('Hata: $e'),
+              content: Text(apiErrorMessage(e)),
               backgroundColor: Colors.red),
         );
       }
@@ -1133,7 +1686,7 @@ class _MenuViewState extends State<_MenuView> {
                   widget.onRefresh();
                 } catch (e) {
                   messenger.showSnackBar(SnackBar(
-                      content: Text('Hata: $e'),
+                      content: Text(apiErrorMessage(e)),
                       backgroundColor: Colors.red));
                 }
               },
@@ -1600,7 +2153,7 @@ class _StaffView extends StatelessWidget {
                   onRefresh();
                 } catch (e) {
                   messenger.showSnackBar(SnackBar(
-                      content: Text('Hata: $e'),
+                      content: Text(apiErrorMessage(e)),
                       backgroundColor: Colors.red));
                 }
               },

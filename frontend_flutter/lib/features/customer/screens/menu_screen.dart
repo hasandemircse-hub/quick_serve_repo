@@ -163,6 +163,20 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
     });
   }
 
+  void _handleSessionClosed(String message) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      ref.read(customerSessionProvider.notifier).consumeSessionClosed();
+      await LocalStorage.clearSessionToken();
+      ref.read(customerSessionProvider.notifier).clearSession();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
+      context.go('/scan');
+    });
+  }
+
   List<dynamic> get _visibleItems {
     if (_searchQuery.isNotEmpty) {
       return _menu.values
@@ -209,6 +223,11 @@ class _MenuScreenState extends ConsumerState<MenuScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final sessionClosedMessage =
+        ref.watch(customerSessionProvider.select((s) => s.sessionClosedMessage));
+    if (sessionClosedMessage != null && sessionClosedMessage.isNotEmpty) {
+      _handleSessionClosed(sessionClosedMessage);
+    }
     final orders = ref.watch(customerSessionProvider.select((s) => s.orders));
     final cartCount =
         ref.watch(cartProvider.select((s) => s.fold(0, (a, i) => a + i.quantity)));

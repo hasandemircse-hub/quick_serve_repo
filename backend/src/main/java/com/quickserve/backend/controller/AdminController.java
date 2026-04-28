@@ -4,6 +4,8 @@ import com.quickserve.backend.dto.menu.CategoryRequest;
 import com.quickserve.backend.dto.menu.MenuItemRequest;
 import com.quickserve.backend.dto.menu.MenuItemResponse;
 import com.quickserve.backend.dto.menu.ReorderRequest;
+import com.quickserve.backend.dto.table.TableGroupRequest;
+import com.quickserve.backend.dto.table.TableGroupResponse;
 import com.quickserve.backend.dto.table.TableLayoutUpdateRequest;
 import com.quickserve.backend.dto.table.TableRequest;
 import com.quickserve.backend.dto.table.TableResponse;
@@ -29,6 +31,7 @@ import java.util.Map;
 public class AdminController {
 
     private final TableService tableService;
+    private final TableGroupService tableGroupService;
     private final MenuService menuService;
     private final StaffService staffService;
     private final OrderService orderService;
@@ -75,12 +78,48 @@ public class AdminController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/tables/{tableId}/undo-regenerate-qr")
+    public ResponseEntity<Void> undoRegenerateQr(@PathVariable Long tableId) {
+        tableService.undoRegenerateQr(tableId);
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping("/tables/{tableId}/qr")
     public ResponseEntity<byte[]> getQrImage(@PathVariable Long tableId) {
         byte[] bytes = tableService.getQrImage(tableId);
         return ResponseEntity.ok()
                 .header("Content-Type", "image/png")
                 .body(bytes);
+    }
+
+    // ──── Masa Grupları ──────────────────────────────────────────────────────
+
+    @GetMapping("/table-groups")
+    public ResponseEntity<List<TableGroupResponse>> getTableGroups() {
+        return ResponseEntity.ok(tableGroupService.getGroups(restaurantId()));
+    }
+
+    @PostMapping("/table-groups")
+    public ResponseEntity<TableGroupResponse> createTableGroup(@Valid @RequestBody TableGroupRequest request) {
+        return ResponseEntity.ok(tableGroupService.createGroup(restaurantId(), request));
+    }
+
+    @PutMapping("/table-groups/{groupId}")
+    public ResponseEntity<TableGroupResponse> updateTableGroup(@PathVariable Long groupId,
+                                                                @Valid @RequestBody TableGroupRequest request) {
+        return ResponseEntity.ok(tableGroupService.updateGroup(restaurantId(), groupId, request));
+    }
+
+    @DeleteMapping("/table-groups/{groupId}")
+    public ResponseEntity<Void> deleteTableGroup(@PathVariable Long groupId) {
+        tableGroupService.deleteGroup(restaurantId(), groupId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/table-groups/reorder")
+    public ResponseEntity<Void> reorderTableGroups(@RequestBody List<ReorderRequest> items) {
+        tableGroupService.reorder(restaurantId(), items);
+        return ResponseEntity.ok().build();
     }
 
     // ──── Menü Yönetimi ──────────────────────────────────────────────────────

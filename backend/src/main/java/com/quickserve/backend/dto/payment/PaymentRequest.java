@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 public class PaymentRequest {
@@ -15,7 +16,9 @@ public class PaymentRequest {
     private BigDecimal amount;
     private BigDecimal tipAmount;
     private Long paymentSplitId;
+    private List<PaymentAllocationRequest> allocations;
     // İyzico kart bilgileri (kart bilgileri doğrudan backend'e gelmez, token olarak gelir)
     private String iyzicoToken;  // Frontend'den İyzico checkout token'ı
     private String conversationId;
+    private String note;
 }

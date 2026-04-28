@@ -14,7 +14,10 @@ public class TableResponse {
     private Integer positionY;
     private Integer capacity;
     private String zone;
+    private Long tableGroupId;
+    private String tableGroupName;
     private String qrToken;
     private String qrUrl;          // Müşteri QR linki
+    private Boolean hasPreviousQr; // Geri alınabilir önceki QR var mı
     private Long activeSessionId;  // Aktif oturum varsa
 }

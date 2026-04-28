@@ -14,7 +14,11 @@ class ApiConstants {
   static const String customerSession = '/customer/session';
   static const String customerMenu = '/customer/menu';
   static const String customerOrders = '/customer/orders';
+  static const String customerPayments = '/customer/payments';
   static const String customerPaymentsInit = '/customer/payments/iyzico/init';
+  static const String customerPaymentsSimulateComplete = '/customer/payments/simulate-complete';
+  static const String customerPaymentsFinancialSummary = '/customer/payments/financial-summary';
+  static const String customerPaymentsPayableItems = '/customer/payments/payable-items';
   static const String customerPaymentsSplit = '/customer/payments/split';
   static const String customerCallWaiter = '/customer/calls/waiter';
   static const String customerCallBill = '/customer/calls/bill';
@@ -25,6 +29,7 @@ class ApiConstants {
   static const String waiterCalls = '/waiter/calls';
   static const String waiterOrders = '/waiter/orders';
   static const String waiterPaymentsCash = '/waiter/payments/cash';
+  static const String waiterSessionOrders = '/waiter/sessions';
 
   // Kitchen
   static const String kitchenOrders = '/kitchen/orders';
@@ -32,6 +37,8 @@ class ApiConstants {
   // Admin
   static const String adminTables = '/admin/tables';
   static const String adminTableLayout = '/admin/tables/layout';
+  static const String adminTableGroups = '/admin/table-groups';
+  static const String adminTableGroupsReorder = '/admin/table-groups/reorder';
   static const String adminMenuCategories = '/admin/menu/categories';
   static const String adminMenuCategoriesReorder = '/admin/menu/categories/reorder';
   static const String adminMenuItems = '/admin/menu/items';

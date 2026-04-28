@@ -9,6 +9,7 @@ public class TableRequest {
     private String tableNumber;
     private Integer capacity;
     private String zone;
+    private Long tableGroupId;
     private Integer positionX;
     private Integer positionY;
 }

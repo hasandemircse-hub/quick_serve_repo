@@ -28,11 +28,13 @@ class CustomerSessionNotifier extends ChangeNotifier {
   String? _sessionToken;
   List<dynamic> _orders = const [];
   CustomerToastEvent? _lastToastEvent;
+  String? _sessionClosedMessage;
   Timer? _fallbackPollTimer;
 
   String? get sessionToken => _sessionToken;
   List<dynamic> get orders => _orders;
   CustomerToastEvent? get lastToastEvent => _lastToastEvent;
+  String? get sessionClosedMessage => _sessionClosedMessage;
 
   Future<void> init() async {
     final stored = await LocalStorage.getSessionToken();
@@ -53,17 +55,23 @@ class CustomerSessionNotifier extends ChangeNotifier {
   void clearSession() {
     if (_sessionToken != null) {
       WebSocketService.instance.unsubscribe(_statusDestination(_sessionToken!));
+      WebSocketService.instance.unsubscribe(_callsDestination(_sessionToken!));
     }
     _fallbackPollTimer?.cancel();
     _fallbackPollTimer = null;
     _sessionToken = null;
     _orders = const [];
     _lastToastEvent = null;
+    _sessionClosedMessage = null;
     notifyListeners();
   }
 
   void consumeToast() {
     _lastToastEvent = null;
+  }
+
+  void consumeSessionClosed() {
+    _sessionClosedMessage = null;
   }
 
   Future<void> refreshOrders() => _loadOrders();
@@ -88,6 +96,11 @@ class CustomerSessionNotifier extends ChangeNotifier {
       'status',
       _handleStatusEvent,
     );
+    WebSocketService.instance.subscribeSession(
+      _sessionToken!,
+      'calls',
+      _handleCallEvent,
+    );
   }
 
   void _startFallbackPolling() {
@@ -99,12 +112,45 @@ class CustomerSessionNotifier extends ChangeNotifier {
   }
 
   String _statusDestination(String token) => '/topic/session/$token/status';
+  String _callsDestination(String token) => '/topic/session/$token/calls';
+
+  void _handleCallEvent(dynamic payload) {
+    if (payload is! String) return;
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is! Map<String, dynamic>) return;
+      if (decoded['event'] != 'ASSIGNED') return;
+      final name = decoded['assignedToName'] as String?;
+      _lastToastEvent = CustomerToastEvent(
+        message: name != null && name.isNotEmpty
+            ? 'Çağrınız görüldü, $name yola çıktı'
+            : 'Çağrınız görüldü, garson geliyor',
+        status: 'CALL_ASSIGNED',
+      );
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[CUSTOMER-WS] calls parse error: $e');
+    }
+  }
 
   void _handleStatusEvent(dynamic payload) {
     if (payload is! String) return;
     try {
       final decoded = jsonDecode(payload);
       if (decoded is! Map<String, dynamic>) return;
+
+      if (decoded['event'] == 'SESSION_CLOSED') {
+        final message = (decoded['message'] as String?)?.trim();
+        _sessionClosedMessage = (message != null && message.isNotEmpty)
+            ? message
+            : 'Masanız kapatıldı. Lütfen QR kodu tekrar okutun.';
+        _lastToastEvent = CustomerToastEvent(
+          message: _sessionClosedMessage!,
+          status: 'SESSION_CLOSED',
+        );
+        notifyListeners();
+        return;
+      }
 
       final incomingId = decoded['id'];
       if (incomingId == null) return;
@@ -148,6 +194,7 @@ class CustomerSessionNotifier extends ChangeNotifier {
     _fallbackPollTimer?.cancel();
     if (_sessionToken != null) {
       WebSocketService.instance.unsubscribe(_statusDestination(_sessionToken!));
+      WebSocketService.instance.unsubscribe(_callsDestination(_sessionToken!));
     }
     super.dispose();
   }

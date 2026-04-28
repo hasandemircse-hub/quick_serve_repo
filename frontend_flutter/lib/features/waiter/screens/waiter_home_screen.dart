@@ -43,6 +43,46 @@ class _WaiterHomeScreenState extends ConsumerState<WaiterHomeScreen>
       'orders',
       _handleOrderEvent,
     );
+    WebSocketService.instance.subscribeRestaurant(
+      id,
+      'calls',
+      _handleCallEvent,
+    );
+  }
+
+  void _handleCallEvent(dynamic payload) {
+    if (!mounted) return;
+    // Hangi event olursa olsun listeyi tazelemek en güvenli yol —
+    // backend, çağrıyı başka bir garson üstlenince ASSIGNED yayınlar,
+    // bu durumda diğer garsonların listesindeki "Üstlen" butonu güncellenmeli.
+    _loadData();
+
+    if (payload is! String) return;
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is! Map<String, dynamic>) return;
+      final event = decoded['event'];
+      final tableNumber = decoded['tableNumber']?.toString() ?? '?';
+      if (event == 'CREATED') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Yeni çağrı: Masa $tableNumber'),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else if (event == 'ASSIGNED') {
+        final name = decoded['assignedToName'] as String?;
+        if (name != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Masa $tableNumber çağrısını $name üstlendi'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (_) {/* sessiz */}
   }
 
   void _handleOrderEvent(dynamic payload) {
@@ -114,6 +154,11 @@ class _WaiterHomeScreenState extends ConsumerState<WaiterHomeScreen>
       appBar: AppBar(
         title: const Text('Garson Paneli'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.point_of_sale),
+            tooltip: 'Kasa',
+            onPressed: () => context.go('/cashier'),
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
           IconButton(
             icon: const Icon(Icons.logout),
@@ -186,6 +231,7 @@ class _WaiterHomeScreenState extends ConsumerState<WaiterHomeScreen>
     final id = _restaurantId;
     if (id != null) {
       WebSocketService.instance.unsubscribe('/topic/restaurant/$id/orders');
+      WebSocketService.instance.unsubscribe('/topic/restaurant/$id/calls');
     }
     _tabController.dispose();
     super.dispose();
@@ -298,8 +344,12 @@ class _CallsTab extends StatelessWidget {
               call['type'] == 'REQUEST_BILL' ? Icons.receipt : Icons.support_agent,
               color: Colors.red,
             ),
-            title: Text('Masa ${call['tableSession']?['table']?['tableNumber'] ?? '?'}'),
-            subtitle: Text(_callTypeLabel(call['type'])),
+            title: Text('Masa ${call['tableNumber'] ?? '?'}'),
+            subtitle: Text(
+              call['assignedToName'] != null
+                  ? '${_callTypeLabel(call['type'])} · ${call['assignedToName']} üstlendi'
+                  : _callTypeLabel(call['type']),
+            ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

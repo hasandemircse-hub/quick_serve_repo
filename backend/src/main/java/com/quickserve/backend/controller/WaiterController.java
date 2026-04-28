@@ -1,13 +1,15 @@
 package com.quickserve.backend.controller;
 
+import com.quickserve.backend.dto.call.WaiterCallResponse;
 import com.quickserve.backend.dto.order.OrderResponse;
 import com.quickserve.backend.dto.payment.PaymentRequest;
 import com.quickserve.backend.dto.payment.PaymentResponse;
+import com.quickserve.backend.dto.payment.SessionFinancialSummaryResponse;
 import com.quickserve.backend.dto.table.TableResponse;
-import com.quickserve.backend.entity.WaiterCall;
 import com.quickserve.backend.enums.CloseReason;
 import com.quickserve.backend.enums.OrderStatus;
 import com.quickserve.backend.security.SecurityUtils;
+import com.quickserve.backend.repository.TableSessionRepository;
 import com.quickserve.backend.service.*;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ public class WaiterController {
     private final PaymentService paymentService;
     private final WaiterCallService waiterCallService;
     private final SecurityUtils securityUtils;
+    private final TableSessionRepository sessionRepository;
 
     @GetMapping("/tables")
     public ResponseEntity<List<TableResponse>> getTables() {
@@ -36,20 +39,22 @@ public class WaiterController {
     }
 
     @GetMapping("/calls")
-    public ResponseEntity<List<WaiterCall>> getPendingCalls() {
+    public ResponseEntity<List<WaiterCallResponse>> getPendingCalls() {
         Long restaurantId = securityUtils.getCurrentUser().getRestaurant().getId();
         return ResponseEntity.ok(waiterCallService.getPendingCalls(restaurantId));
     }
 
     @PostMapping("/calls/{callId}/assign")
-    public ResponseEntity<WaiterCall> assignCall(@PathVariable Long callId) {
+    public ResponseEntity<WaiterCallResponse> assignCall(@PathVariable Long callId) {
         Long waiterId = securityUtils.getCurrentUser().getId();
-        return ResponseEntity.ok(waiterCallService.assignCall(callId, waiterId));
+        return ResponseEntity.ok(
+                waiterCallService.toDto(waiterCallService.assignCall(callId, waiterId)));
     }
 
     @PostMapping("/calls/{callId}/resolve")
-    public ResponseEntity<WaiterCall> resolveCall(@PathVariable Long callId) {
-        return ResponseEntity.ok(waiterCallService.resolveCall(callId));
+    public ResponseEntity<WaiterCallResponse> resolveCall(@PathVariable Long callId) {
+        return ResponseEntity.ok(
+                waiterCallService.toDto(waiterCallService.resolveCall(callId)));
     }
 
     @GetMapping("/orders")
@@ -61,6 +66,33 @@ public class WaiterController {
     @PostMapping("/orders/{orderId}/deliver")
     public ResponseEntity<OrderResponse> markDelivered(@PathVariable Long orderId) {
         return ResponseEntity.ok(orderService.updateStatus(orderId, OrderStatus.DELIVERED));
+    }
+
+    @GetMapping("/sessions/{sessionId}/orders")
+    public ResponseEntity<List<OrderResponse>> getSessionOrders(@PathVariable Long sessionId) {
+        requireSessionInCurrentRestaurant(sessionId);
+        return ResponseEntity.ok(orderService.getSessionOrdersBySessionId(sessionId));
+    }
+
+    @GetMapping("/sessions/{sessionId}/payments")
+    public ResponseEntity<List<PaymentResponse>> getSessionPayments(@PathVariable Long sessionId) {
+        requireSessionInCurrentRestaurant(sessionId);
+        return ResponseEntity.ok(paymentService.getSessionPaymentsBySessionId(sessionId));
+    }
+
+    @GetMapping("/sessions/{sessionId}/financial-summary")
+    public ResponseEntity<SessionFinancialSummaryResponse> getFinancialSummary(@PathVariable Long sessionId) {
+        requireSessionInCurrentRestaurant(sessionId);
+        return ResponseEntity.ok(paymentService.getSessionFinancialSummaryBySessionId(sessionId));
+    }
+
+    @PostMapping("/sessions/{sessionId}/payments/cash")
+    public ResponseEntity<PaymentResponse> processSessionCashPayment(
+            @PathVariable Long sessionId,
+            @RequestBody PaymentRequest request) {
+        requireSessionInCurrentRestaurant(sessionId);
+        Long waiterId = securityUtils.getCurrentUser().getId();
+        return ResponseEntity.ok(paymentService.processCashPaymentBySessionId(sessionId, request, waiterId));
     }
 
     @PostMapping("/sessions/{sessionId}/close")
@@ -78,5 +110,14 @@ public class WaiterController {
             @RequestBody PaymentRequest request) {
         Long waiterId = securityUtils.getCurrentUser().getId();
         return ResponseEntity.ok(paymentService.processCashPayment(sessionToken, request, waiterId));
+    }
+
+    private void requireSessionInCurrentRestaurant(Long sessionId) {
+        Long restaurantId = securityUtils.getCurrentUser().getRestaurant().getId();
+        Long sessionRestaurantId = sessionRepository.findRestaurantIdBySessionId(sessionId)
+                .orElseThrow(() -> new com.quickserve.backend.exception.ResourceNotFoundException("TableSession", sessionId));
+        if (!restaurantId.equals(sessionRestaurantId)) {
+            throw new com.quickserve.backend.exception.UnauthorizedException("Bu oturuma erişim yetkiniz yok");
+        }
     }
 }

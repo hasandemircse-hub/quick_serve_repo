@@ -6,12 +6,14 @@ import com.quickserve.backend.dto.table.TableRequest;
 import com.quickserve.backend.dto.table.TableResponse;
 import com.quickserve.backend.entity.Restaurant;
 import com.quickserve.backend.entity.RestaurantTable;
+import com.quickserve.backend.entity.TableGroup;
 import com.quickserve.backend.entity.TableSession;
 import com.quickserve.backend.enums.CloseReason;
 import com.quickserve.backend.enums.TableStatus;
 import com.quickserve.backend.exception.BusinessException;
 import com.quickserve.backend.exception.ResourceNotFoundException;
 import com.quickserve.backend.repository.RestaurantTableRepository;
+import com.quickserve.backend.repository.TableGroupRepository;
 import com.quickserve.backend.repository.TableSessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,7 @@ import java.util.UUID;
 public class TableService {
 
     private final RestaurantTableRepository tableRepository;
+    private final TableGroupRepository tableGroupRepository;
     private final TableSessionRepository sessionRepository;
     private final RestaurantService restaurantService;
     private final QrCodeService qrCodeService;
@@ -37,6 +40,7 @@ public class TableService {
             throw new BusinessException("Bu masa numarası zaten mevcut: " + request.getTableNumber());
         }
         Restaurant restaurant = restaurantService.findById(restaurantId);
+        TableGroup group = resolveGroup(restaurantId, request.getTableGroupId());
         RestaurantTable table = RestaurantTable.builder()
                 .restaurant(restaurant)
                 .tableNumber(request.getTableNumber())
@@ -44,6 +48,7 @@ public class TableService {
                 .status(TableStatus.EMPTY)
                 .capacity(request.getCapacity() != null ? request.getCapacity() : 4)
                 .zone(request.getZone())
+                .tableGroup(group)
                 .positionX(request.getPositionX() != null ? request.getPositionX() : 0)
                 .positionY(request.getPositionY() != null ? request.getPositionY() : 0)
                 .build();
@@ -56,7 +61,20 @@ public class TableService {
         if (request.getTableNumber() != null) table.setTableNumber(request.getTableNumber());
         if (request.getCapacity() != null) table.setCapacity(request.getCapacity());
         if (request.getZone() != null) table.setZone(request.getZone());
+        // tableGroupId açıkça gelirse uygulanır; null gönderilirse "Gruptan çıkar" anlamı taşır.
+        // Bu yüzden alan request payload'unda mevcutsa setleriz; istemci dokunmuyorsa zaten gönderilmez.
+        table.setTableGroup(resolveGroup(table.getRestaurant().getId(), request.getTableGroupId()));
         return toDto(tableRepository.save(table));
+    }
+
+    private TableGroup resolveGroup(Long restaurantId, Long groupId) {
+        if (groupId == null) return null;
+        TableGroup group = tableGroupRepository.findById(groupId)
+                .orElseThrow(() -> new ResourceNotFoundException("TableGroup", groupId));
+        if (!group.getRestaurant().getId().equals(restaurantId)) {
+            throw new BusinessException("Masa grubu bu restorana ait değil");
+        }
+        return group;
     }
 
     @Transactional
@@ -123,6 +141,13 @@ public class TableService {
 
         notificationService.publishToRestaurant(table.getRestaurant().getId(), "tables",
                 java.util.Map.of("tableId", table.getId(), "status", "EMPTY"));
+        notificationService.publishToSession(session.getSessionToken(), "status",
+                java.util.Map.of(
+                        "event", "SESSION_CLOSED",
+                        "sessionId", session.getId(),
+                        "reason", reason.name(),
+                        "message", "Masanız kapatıldı. Yeni işlem için lütfen QR kodu tekrar okutun."
+                ));
     }
 
     @Transactional(readOnly = true)
@@ -135,7 +160,25 @@ public class TableService {
     @Transactional
     public void regenerateQr(Long tableId) {
         RestaurantTable table = findById(tableId);
+        // Yenileme öncesi mevcut token'ı "Geri Al" için sakla.
+        table.setPreviousQrToken(table.getQrToken());
         table.setQrToken(UUID.randomUUID().toString());
+        tableRepository.save(table);
+    }
+
+    /**
+     * En son yenilenen QR'ı geri alır. previousQrToken yoksa hata.
+     */
+    @Transactional
+    public void undoRegenerateQr(Long tableId) {
+        RestaurantTable table = findById(tableId);
+        String previous = table.getPreviousQrToken();
+        if (previous == null || previous.isBlank()) {
+            throw new BusinessException("Geri alınacak önceki QR yok");
+        }
+        // Çift undo'yu engellemek için previous'u boşaltıyoruz.
+        table.setQrToken(previous);
+        table.setPreviousQrToken(null);
         tableRepository.save(table);
     }
 
@@ -170,6 +213,7 @@ public class TableService {
 
     public TableResponse toDto(RestaurantTable t) {
         TableSession activeSession = sessionRepository.findByTableIdAndIsActiveTrue(t.getId()).orElse(null);
+        TableGroup group = t.getTableGroup();
         return TableResponse.builder()
                 .id(t.getId())
                 .tableNumber(t.getTableNumber())
@@ -178,8 +222,11 @@ public class TableService {
                 .positionY(t.getPositionY())
                 .capacity(t.getCapacity())
                 .zone(t.getZone())
+                .tableGroupId(group != null ? group.getId() : null)
+                .tableGroupName(group != null ? group.getName() : null)
                 .qrToken(t.getQrToken())
                 .qrUrl(qrCodeService.generateQrUrl(t.getQrToken()))
+                .hasPreviousQr(t.getPreviousQrToken() != null && !t.getPreviousQrToken().isBlank())
                 .activeSessionId(activeSession != null ? activeSession.getId() : null)
                 .build();
     }
