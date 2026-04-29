@@ -43,7 +43,13 @@ public class SecurityConfig {
                 // Auth endpointleri
                 .requestMatchers("/auth/**").permitAll()
                 // Swagger / Actuator
-                .requestMatchers("/swagger-ui/**", "/api-docs/**", "/actuator/health").permitAll()
+                // Backend'de `server.servlet.context-path=/api` olduğu için gerçek yol `/api/actuator/health` olur.
+                .requestMatchers(
+                    "/swagger-ui/**",
+                    "/api-docs/**",
+                    "/actuator/health",
+                    "/api/actuator/health"
+                ).permitAll()
                 // WebSocket handshake (SockJS + raw). JWT query param ile doğrulanır.
                 .requestMatchers("/ws", "/ws/**").permitAll()
                 // Sadece SUPERADMIN
