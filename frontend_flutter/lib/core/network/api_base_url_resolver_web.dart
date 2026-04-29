@@ -1,20 +1,13 @@
-// ignore_for_file: deprecated_member_use, avoid_web_libraries_in_flutter
-import 'dart:html' as html;
-
 String resolveApiBaseUrlImpl(String baseUrl) {
-  final origin = html.window.location.origin; // 'https://quickserve.duckdns.org'
-  if (origin.isEmpty) return baseUrl;
-
-  // baseUrl her zaman mutlak bir URL olmasa da (ör. '/api'), bunu tolere ediyoruz.
-  if (baseUrl.startsWith('/')) {
-    return '$origin$baseUrl';
-  }
+  // Mixed-content problemini tamamen önlemek için web'de baseUrl'yi asla
+  // "http://host/..." gibi mutlak URL olarak kullanmıyoruz.
+  // Bunun yerine sadece path döndürüp istemleri aynı origin'e göreli yapıyoruz:
+  //   - API_URL=http://165.245.214.173/api  ->  '/api'
+  //   - API_URL=/api                         ->  '/api'
+  if (baseUrl.startsWith('/')) return baseUrl;
 
   final uri = Uri.tryParse(baseUrl);
-  if (uri == null) return baseUrl;
-
-  final path = uri.path.isNotEmpty ? uri.path : '/api';
-  final normalizedPath = path.startsWith('/') ? path : '/$path';
-  return '$origin$normalizedPath';
+  final path = (uri != null && uri.path.isNotEmpty) ? uri.path : '/api';
+  return path.startsWith('/') ? path : '/$path';
 }
 
