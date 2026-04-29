@@ -2,10 +2,8 @@
 import 'dart:html' as html;
 
 String resolveApiBaseUrlImpl(String baseUrl) {
-  final protocol = html.window.location.protocol; // 'https:' / 'http:'
-  if (protocol != 'https:') return baseUrl;
-
   final origin = html.window.location.origin; // 'https://quickserve.duckdns.org'
+  if (origin.isEmpty) return baseUrl;
 
   // baseUrl her zaman mutlak bir URL olmasa da (ör. '/api'), bunu tolere ediyoruz.
   if (baseUrl.startsWith('/')) {
