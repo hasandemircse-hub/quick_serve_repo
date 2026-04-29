@@ -119,7 +119,7 @@ jobs:
 
     environment:
       name: production
-      url: http://3.73.40.114
+      url: http://165.245.214.173
 
     steps:
       - uses: actions/checkout@v4
@@ -159,12 +159,12 @@ jobs:
 
             # Flutter web dosyalarını volume'a kopyala
             docker run --rm \
-              -v /opt/quickserve/flutter-web:/src:ro \
+              -v $DEPLOY_PATH/flutter-web:/src:ro \
               -v quickserve_flutter_web:/dst \
               alpine sh -c "cp -r /src/. /dst/"
 
             # Tüm servisleri başlat / güncelle
-            docker-compose -f /opt/quickserve/docker-compose.yml --env-file /opt/quickserve/.env up -d
+            docker compose -f $DEPLOY_PATH/docker-compose.yml --env-file $DEPLOY_PATH/.env up -d
 
             # Eski image'ları temizle
             docker image prune -f
@@ -180,7 +180,7 @@ jobs:
               echo "Deneme $i/12..."
               if [ $i -eq 12 ]; then
                 echo "Health check başarısız!"
-                docker-compose -f /opt/quickserve/docker-compose.yml logs backend
+                docker compose -f $DEPLOY_PATH/docker-compose.yml logs backend
                 exit 1
               fi
             done
