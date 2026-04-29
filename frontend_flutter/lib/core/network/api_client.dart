@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/api_constants.dart';
+import 'api_base_url_resolver.dart';
 
 class ApiClient {
   static ApiClient? _instance;
@@ -8,7 +9,7 @@ class ApiClient {
 
   ApiClient._() {
     _dio = Dio(BaseOptions(
-      baseUrl: ApiConstants.baseUrl,
+      baseUrl: resolveApiBaseUrl(ApiConstants.baseUrl),
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 30),
       headers: {'Content-Type': 'application/json'},

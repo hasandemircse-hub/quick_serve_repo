@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../constants/api_constants.dart';
+import '../network/api_base_url_resolver.dart';
 import '../network/websocket_service.dart';
 import '../storage/local_storage.dart';
 
@@ -105,7 +106,7 @@ class AuthNotifier extends ChangeNotifier {
 
   void _connectWebSocket(String token) {
     WebSocketService.instance.connect(
-      baseUrl: ApiConstants.baseUrl,
+      baseUrl: resolveApiBaseUrl(ApiConstants.baseUrl),
       jwtToken: token,
     );
   }

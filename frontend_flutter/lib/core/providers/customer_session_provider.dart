@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../constants/api_constants.dart';
 import '../network/api_client.dart';
+import '../network/api_base_url_resolver.dart';
 import '../network/websocket_service.dart';
 import '../storage/local_storage.dart';
 
@@ -90,7 +91,8 @@ class CustomerSessionNotifier extends ChangeNotifier {
 
   void _connectAndSubscribe() {
     if (_sessionToken == null) return;
-    WebSocketService.instance.connect(baseUrl: ApiConstants.baseUrl);
+    WebSocketService.instance
+        .connect(baseUrl: resolveApiBaseUrl(ApiConstants.baseUrl));
     WebSocketService.instance.subscribeSession(
       _sessionToken!,
       'status',
