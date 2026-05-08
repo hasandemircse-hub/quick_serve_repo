@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Canonical architecture & scenarios:** [docs/QUICKSERVE_SYSTEM_REFERENCE.md](docs/QUICKSERVE_SYSTEM_REFERENCE.md) (topology, deploy, gaps, flow catalog).
 
+**Git remotes:** [docs/git_remotes_and_migration.md](docs/git_remotes_and_migration.md) — `origin` = `quick_serve_repo`, `legacy` = eski `quick_serve`; push yalnızca `origin`.
+
 QuickServe is a restaurant management platform with:
 - **Backend:** Spring Boot 3.x (Java 21, Maven), PostgreSQL 16
 - **Frontend:** Flutter 3.11+ (Dart), multi-platform (web + mobile)

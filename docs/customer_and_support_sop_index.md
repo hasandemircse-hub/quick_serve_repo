@@ -5,6 +5,7 @@ Bu dosya, satış öncesi “kritik açık” kapsamındaki **müşteri/kurulum 
 | Konu | Doküman |
 |------|---------|
 | **Sistem topolojisi, deploy, senaryolar (canonical)** | [QUICKSERVE_SYSTEM_REFERENCE.md](QUICKSERVE_SYSTEM_REFERENCE.md) |
+| Git `origin` / `legacy`, yeni repoya push | [git_remotes_and_migration.md](git_remotes_and_migration.md) |
 | Restoran onboarding (kurulum, eğitim, ilk hafta) | [restaurant_onboarding_guide.md](restaurant_onboarding_guide.md) |
 | Kurulum süresi, SLA, L1/L2/L3 destek akışı | [installation_sla_and_support_process.md](installation_sla_and_support_process.md) |
 | UAT / kabul testi (GO/NO-GO) | [uat_checklist_restaurant_operations.md](uat_checklist_restaurant_operations.md) |
