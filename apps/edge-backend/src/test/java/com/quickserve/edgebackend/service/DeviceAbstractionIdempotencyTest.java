@@ -7,6 +7,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -23,7 +24,8 @@ class DeviceAbstractionIdempotencyTest {
 
     @Test
     void sameIdempotencyKeyReplaysCachedResult() {
-        var req = new PosChargeRequest("p1", new BigDecimal("10.00"), "TRY", "o1", "idem-replay-1");
+        String idemKey = "idem-replay-" + UUID.randomUUID();
+        var req = new PosChargeRequest("p1", new BigDecimal("10.00"), "TRY", "o1", idemKey);
         var first = deviceAbstractionService.charge(req, "mock-pos");
         assertFalse(first.idempotentReplay());
 
@@ -35,14 +37,15 @@ class DeviceAbstractionIdempotencyTest {
 
     @Test
     void conflictingPayloadWithSameIdempotencyKeyReturns409() {
+        String idemKey = "idem-conflict-" + UUID.randomUUID();
         deviceAbstractionService.charge(
-                new PosChargeRequest("p1", new BigDecimal("10.00"), "TRY", "o1", "idem-conflict-1"),
+                new PosChargeRequest("p1", new BigDecimal("10.00"), "TRY", "o1", idemKey),
                 "mock-pos");
 
         ResponseStatusException ex = assertThrows(
                 ResponseStatusException.class,
                 () -> deviceAbstractionService.charge(
-                        new PosChargeRequest("p1", new BigDecimal("11.00"), "TRY", "o1", "idem-conflict-1"),
+                        new PosChargeRequest("p1", new BigDecimal("11.00"), "TRY", "o1", idemKey),
                         "mock-pos"));
 
         assertEquals(409, ex.getStatusCode().value());

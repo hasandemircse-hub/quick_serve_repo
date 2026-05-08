@@ -20,6 +20,7 @@ Kullanım:
 - Son güncelleme: 2026-05-08 (delivery track icra panosu kapatıldı)
 
 ### Tamamlanan temel hazırlıklar
+- Git: aktif remote `origin` → `quick_serve_repo`; eski repo `legacy` → `quick_serve` (detay: `docs/git_remotes_and_migration.md`); push kullanıcı ortamında SSH/HTTPS ile
 - Teknik canonical referans: `docs/QUICKSERVE_SYSTEM_REFERENCE.md` (topoloji, özellik envanteri, deploy, senaryo kataloğu, eksikler)
 - Cloud/edge temel şablon ayrımı (apps/packages klasörleri)
 - Cloud/edge compose ve env şablonları
