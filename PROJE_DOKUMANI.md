@@ -660,3 +660,183 @@ Backend `GET /customer/payments` endpoint'i mevcut fakat frontend hiçbir yerde 
 | 10 | Oturum kapanma bildirimi yok | 🟡 Önemli | Müşteri | Açık |
 | 11 | GET /customer/payments kullanılmıyor | 🔵 Düşük | Müşteri | Açık |
 | 12 | RadioListTile deprecation uyarısı | 🔵 Düşük | — | Açık |
+
+---
+
+## Cloud-Edge Dönüşüm MVP Tasarımı (Yeni Yol Haritası)
+
+Bu bölüm, QuickServe'ü cloud + edge hibrit mimariye kademeli geçirmek için teknik başlangıç planıdır.
+
+### 1) Mimari Hedef (Kısa)
+
+- **Cloud:** Superadmin, restoran/edge yönetimi, merkezi veri saklama, raporlama, özellik/lisans yönetimi.
+- **Edge (restoran içi):** Garson/mutfak/kasa akışları, POS + termal yazıcı entegrasyonu, LAN içi düşük gecikme, offline çalışma.
+- **Müşteri:** Cloud giriş noktası üzerinden restoran edge'ine yönlenen sipariş akışı.
+- **Tutarlılık hedefi:** Online durumda cloud ile p95 <= 5 saniye sync.
+- **Offline hedefi:** Restoran içi operasyonların en az 24 saat kesintisiz devamı.
+
+### 2) Önerilen MVP Teknoloji Kararları
+
+- **Edge veritabanı:** SQLite (`WAL` mode açık).
+- **Event altyapısı (cloud):** RabbitMQ.
+- **Sync modeli:** Outbox/Inbox + idempotency key + retry + dead-letter queue.
+- **POS entegrasyonu:** Provider-agnostic adapter sözleşmesi.
+- **Edge güncelleme:** Docker image rollout + health check + otomatik rollback.
+- **Uzak yönetim:** SSH opsiyonel; varsayılan agent tabanlı yönetim.
+
+### 3) Sistem Akışı (MVP)
+
+```text
+Staff App (LAN) ---> Edge API ---> Edge SQLite
+                          |             |
+                          |             +--> Outbox Events
+                          v
+                     Device Service ----> POS / Thermal Printer
+                          |
+                          v
+                    Sync Agent <----> Cloud Ingest API ---> Cloud DB
+                                             |
+                                             v
+                                          RabbitMQ
+
+Customer App ---> Cloud Gateway ---> Restaurant Edge Route ---> Edge API
+```
+
+### 4) Edge SQLite Şeması (Başlangıç Taslağı)
+
+Not: Mevcut domain tabloları korunur; aşağıdaki tablolar sync ve güvenilirlik için eklenir.
+
+#### `edge_outbox_events`
+- `id` (TEXT, PK, UUID)
+- `restaurant_id` (TEXT, NOT NULL)
+- `edge_id` (TEXT, NOT NULL)
+- `event_type` (TEXT, NOT NULL)  
+- `aggregate_type` (TEXT, NOT NULL)  // ORDER, PAYMENT, SESSION vb.
+- `aggregate_id` (TEXT, NOT NULL)
+- `payload_json` (TEXT, NOT NULL)
+- `idempotency_key` (TEXT, NOT NULL, UNIQUE)
+- `status` (TEXT, NOT NULL) // PENDING, SENT, ACKED, FAILED
+- `attempt_count` (INTEGER, NOT NULL DEFAULT 0)
+- `next_retry_at` (DATETIME, NULL)
+- `created_at` (DATETIME, NOT NULL)
+- `updated_at` (DATETIME, NOT NULL)
+
+Indexler:
+- `(status, next_retry_at)`
+- `(restaurant_id, created_at)`
+
+#### `edge_inbox_events`
+- `id` (TEXT, PK)
+- `source` (TEXT, NOT NULL) // CLOUD
+- `event_type` (TEXT, NOT NULL)
+- `idempotency_key` (TEXT, NOT NULL, UNIQUE)
+- `payload_json` (TEXT, NOT NULL)
+- `processed` (INTEGER, NOT NULL DEFAULT 0)
+- `processed_at` (DATETIME, NULL)
+- `created_at` (DATETIME, NOT NULL)
+
+#### `sync_checkpoint`
+- `restaurant_id` (TEXT, PK)
+- `last_acked_event_at` (DATETIME, NULL)
+- `last_pull_cursor` (TEXT, NULL)
+- `updated_at` (DATETIME, NOT NULL)
+
+#### `local_feature_flags`
+- `restaurant_id` (TEXT, NOT NULL)
+- `feature_code` (TEXT, NOT NULL) // POS, TABLE_PAYMENT, BILL_PRINTING...
+- `enabled` (INTEGER, NOT NULL)
+- `version` (INTEGER, NOT NULL)
+- `updated_at` (DATETIME, NOT NULL)
+- PK: `(restaurant_id, feature_code)`
+
+### 5) Event Listesi (MVP Event Catalog)
+
+#### Sipariş
+- `order.created`
+- `order.item_added`
+- `order.item_removed`
+- `order.submitted`
+- `order.preparing`
+- `order.ready`
+- `order.delivered`
+- `order.cancelled`
+
+#### Ödeme
+- `payment.initiated`
+- `payment.authorized`
+- `payment.captured`
+- `payment.failed`
+- `payment.refunded`
+
+#### Oturum / Masa
+- `session.opened`
+- `session.closed`
+- `table.status_changed`
+
+#### Cihaz / Operasyon
+- `printer.job_created`
+- `printer.job_completed`
+- `printer.job_failed`
+- `pos.transaction_synced`
+- `edge.health_heartbeat`
+
+### 6) POS Adapter Sözleşmesi (Provider-Agnostic)
+
+MVP'de uygulama içi tüm POS işlemleri aşağıdaki ortak sözleşme üzerinden çalışır:
+
+```java
+public interface PosProviderAdapter {
+    PosInitResponse initPayment(PosInitRequest request);
+    PosStatusResponse getPaymentStatus(String providerTxnId);
+    PosConfirmResponse confirmPayment(PosConfirmRequest request);
+    PosCancelResponse cancelPayment(PosCancelRequest request);
+    PosRefundResponse refundPayment(PosRefundRequest request);
+    ProviderHealthResponse healthCheck();
+}
+```
+
+Zorunlu davranış kuralları:
+- Her çağrı `idempotencyKey` taşımalı.
+- `providerTxnId` ile yaşam döngüsü izlenmeli.
+- Timeout/bağlantı hataları `retryable` olarak işaretlenmeli.
+- İşlemsel durumlar sistem içi standart status map'ine çevrilmeli.
+
+### 7) Edge Update Mekanizması (MVP)
+
+#### Bileşenler
+- `edge-agent` (sürüm kontrol, config çekme, rollout uygulama)
+- `edge-api` (iş mantığı)
+- `edge-sync` (cloud senkronizasyon)
+- `edge-device` (POS/printer adapter runtime)
+
+#### Akış
+1. Cloud, hedef restoran/segment için yeni image versiyonunu yayınlar.
+2. Edge agent periyodik olarak policy ve versiyon kontrol eder.
+3. Image indirilir, container health check geçerse trafik yeni sürüme alınır.
+4. Health check başarısızsa otomatik rollback yapılır.
+5. Sonuç cloud'a event olarak raporlanır.
+
+### 8) 2 Haftalık İlk Implementasyon Backlog'u
+
+#### Hafta 1
+1. Cloud tarafında `EdgeNode`, `FeatureFlag`, `EdgeEnrollment` entity + API.
+2. Edge SQLite migration: `edge_outbox_events`, `edge_inbox_events`, `sync_checkpoint`, `local_feature_flags`.
+3. Edge Sync Worker: outbox gönderim + retry + idempotency.
+4. Flutter endpoint resolver:
+   - Staff rolleri -> Edge base URL (LAN)
+   - Customer -> Cloud gateway
+
+#### Hafta 2
+5. POS adapter interface + mock provider implementasyonu.
+6. Thermal printer adapter için ilk abstraction katmanı.
+7. Superadmin "Restoran Özellikleri" sayfası (POS, adisyon, masada ödeme aç/kapa).
+8. Edge health heartbeat + cloud dashboard'da node durumları.
+
+### 9) Kabul Kriterleri (MVP Exit Criteria)
+
+- İnternet kesildiğinde restoran içi sipariş ve ödeme akışları 24 saat çalışır.
+- İnternet geri geldiğinde birikmiş event'ler cloud'a kayıpsız senkronize olur.
+- Online durumda edge -> cloud event gecikmesi p95 <= 5 saniye.
+- POS işlemleri ortak adapter sözleşmesi üzerinden provider bağımsız ilerler.
+- Edge güncellemesi başarısız olursa otomatik rollback gerçekleşir.
+- Restoran bazlı feature flag'ler cloud'dan yönetilir ve edge'e yansır.

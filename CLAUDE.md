@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
+**Canonical architecture & scenarios:** [docs/QUICKSERVE_SYSTEM_REFERENCE.md](docs/QUICKSERVE_SYSTEM_REFERENCE.md) (topology, deploy, gaps, flow catalog).
+
 QuickServe is a restaurant management platform with:
 - **Backend:** Spring Boot 3.x (Java 21, Maven), PostgreSQL 16
 - **Frontend:** Flutter 3.11+ (Dart), multi-platform (web + mobile)
@@ -11,24 +13,26 @@ QuickServe is a restaurant management platform with:
 
 ## Development Commands
 
-### Backend
+### Backend (cloud)
 ```bash
-cd backend
-./mvnw spring-boot:run          # Start dev server on :8080/api
-./mvnw test                     # Run all tests
-./mvnw clean package -DskipTests  # Build JAR
+cd apps/cloud-backend
+mvn spring-boot:run             # Start dev server on :8080/api
+mvn test                        # Run all tests
+mvn clean package -DskipTests   # Build JAR
 ```
 Swagger UI available at `http://localhost:8080/api/swagger-ui.html`
 
 ### Frontend
+Shared UI/logic: `packages/shared-frontend`. Web apps: `apps/cloud-frontend` (müşteri/cloud), `apps/edge-frontend` (personel/edge).
+
 ```bash
-cd frontend_flutter
-flutter pub get                 # Install dependencies
-flutter run -d chrome           # Run as web app
-flutter run                     # Run on connected device
-flutter test                    # Run unit tests
-flutter build web --dart-define=API_URL="http://localhost:8080/api"
+cd apps/cloud-frontend   # veya apps/edge-frontend
+flutter pub get
+flutter run -d chrome
+./build_web.sh           # release web (cloud-frontend; env ile API URL)
 ```
+
+`packages/shared-frontend` içinde birim testleri: `cd packages/shared-frontend && flutter test`
 
 ### Full Stack (Docker)
 ```bash
@@ -43,14 +47,14 @@ docker compose logs -f backend  # Tail backend logs
 ```
 Controller → Service → Repository (JPA)
 ```
-- Controllers in `backend/.../controller/` — one per domain (auth, customer, waiter, kitchen, admin, superadmin)
+- Controllers in `apps/cloud-backend/.../controller/` — one per domain (auth, customer, waiter, kitchen, admin, superadmin)
 - Services contain all business logic; repositories are plain JPA interfaces
 - Schema managed by Hibernate `ddl-auto=update` (no migration files)
 - Superadmin is auto-seeded on first startup via `@PostConstruct` in `AuthService`
 
 ### Frontend Feature Structure
 ```
-frontend_flutter/lib/features/[role]/
+packages/shared-frontend/lib/features/[role]/
   ├── screens/        # UI screens
   ├── providers/      # Riverpod state providers
   └── widgets/        # Role-specific widgets
@@ -75,7 +79,7 @@ STOMP over SockJS. Topics:
 
 ### CI/CD
 GitHub Actions (`.github/workflows/ci-cd.yml`):
-1. **Test** — PostgreSQL service container + `./mvnw test`
+1. **Test** — PostgreSQL service container + `mvn test` in `apps/cloud-backend`
 2. **Build** — Flutter web build, Maven package, Docker image pushed to `ghcr.io`
 3. **Deploy** — SCP Flutter build, pull image, `docker compose up -d` on VM, health-check `/api/actuator/health`
 

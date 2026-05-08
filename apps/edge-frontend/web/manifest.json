@@ -1,0 +1,11 @@
+{
+  "name": "QuickServe Edge Frontend",
+  "short_name": "QS Edge",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#e53935",
+  "description": "QuickServe edge staff frontend",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false
+}

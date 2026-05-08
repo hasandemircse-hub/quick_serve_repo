@@ -1,0 +1,84 @@
+name: shared_frontend
+description: QuickServe shared Flutter UI and logic (cloud + edge apps)
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  flutter_riverpod: ^2.6.1
+  riverpod_annotation: ^2.3.5
+
+  go_router: ^14.8.1
+
+  dio: ^5.8.0+1
+  retrofit: ^4.4.2
+
+  stomp_dart_client: ^2.0.0
+
+  hive_flutter: ^1.1.0
+  hive: ^2.2.3
+  shared_preferences: ^2.3.5
+
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.0.1
+
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  flutter_svg: ^2.0.17
+  cached_network_image: ^3.4.1
+  shimmer: ^3.0.0
+  badges: ^3.1.2
+  flutter_animate: ^4.5.2
+  lottie: ^3.2.0
+
+  intl: ^0.20.2
+  flutter_localizations:
+    sdk: flutter
+
+  printing: ^5.13.2
+  pdf: ^3.11.1
+
+  equatable: ^2.0.7
+  json_annotation: ^4.9.0
+  freezed_annotation: ^2.4.4
+  path_provider: ^2.1.5
+  url_launcher: ^6.3.1
+  image_picker: ^1.1.2
+  permission_handler: ^11.3.1
+  connectivity_plus: ^6.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.4.14
+  json_serializable: ^6.9.4
+  freezed: ^2.5.8
+  riverpod_generator: ^2.4.3
+  retrofit_generator: ^9.1.7
+  flutter_launcher_icons: ^0.14.1
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/icons/app_icon.png"
+  min_sdk_android: 21
+  web:
+    generate: true
+    image_path: "assets/icons/app_icon.png"
+    background_color: "#e53935"
+    theme_color: "#e53935"
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/animations/

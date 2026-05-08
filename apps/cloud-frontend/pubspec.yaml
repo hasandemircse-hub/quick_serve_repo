@@ -1,0 +1,21 @@
+name: quickserve_cloud_frontend
+description: QuickServe cloud frontend
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_frontend:
+    path: ../../packages/shared-frontend
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

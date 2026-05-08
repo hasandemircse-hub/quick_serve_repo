@@ -2,11 +2,14 @@
     "configurations": [
         {
             "type": "java",
-            "name": "Spring Boot-BackendApplication<backend>",
+            "name": "Spring Boot-BackendApplication<cloud-backend>",
             "request": "launch",
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/apps/cloud-backend",
             "mainClass": "com.quickserve.backend.BackendApplication",
-            "projectName": "backend",
+            "projectName": "cloud-backend",
+            "env": {
+                "SPRING_PROFILES_ACTIVE": "dev"
+            },
             "args": "",
             "envFile": "${workspaceFolder}/.env"
         }

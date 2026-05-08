@@ -1,17 +1,28 @@
 name: CI/CD Pipeline
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: production-deploy-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: hasandemircse-hub/quick_serve/quickserve-backend
+  EDGE_IMAGE_NAME: hasandemircse-hub/quick_serve/quickserve-edge-backend
+
+permissions:
+  contents: read
 
 jobs:
   # ─── Test ─────────────────────────────────────────────────────────────────
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -39,10 +50,10 @@ jobs:
           cache: maven
 
       - name: Run tests
-        working-directory: ./backend
+        working-directory: ./apps/cloud-backend
         env:
           SPRING_PROFILES_ACTIVE: test
-        run: ./mvnw test --no-transfer-progress
+        run: mvn test --no-transfer-progress
 
   # ─── Build & Push ─────────────────────────────────────────────────────────
   build:
@@ -50,6 +61,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    timeout-minutes: 30
 
     permissions:
       contents: read
@@ -64,15 +76,33 @@ jobs:
         with:
           channel: stable
 
-      - name: Build Flutter Web
-        working-directory: ./frontend_flutter
-        run: flutter build web --dart-define=API_URL=http://${{ secrets.DEPLOY_HOST }}/api --release
+      - name: Build cloud-frontend web artifact
+        run: |
+          DEPLOY_HOST_VALUE="${{ secrets.DEPLOY_HOST }}"
+          if [ -z "$DEPLOY_HOST_VALUE" ]; then DEPLOY_HOST_VALUE="localhost"; fi
+          CLOUD_API_URL="http://$DEPLOY_HOST_VALUE/api" \
+          WEB_ADMIN_URL="http://$DEPLOY_HOST_VALUE/auth/admin" \
+          ./apps/cloud-frontend/build_web.sh
 
-      - name: Upload Flutter build
+      - name: Upload cloud-frontend artifact
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-web
-          path: frontend_flutter/build/web/
+          name: cloud-frontend-web
+          path: apps/cloud-frontend/build/web/
+
+      - name: Build edge-frontend web artifact
+        run: |
+          DEPLOY_HOST_VALUE="${{ secrets.DEPLOY_HOST }}"
+          if [ -z "$DEPLOY_HOST_VALUE" ]; then DEPLOY_HOST_VALUE="localhost"; fi
+          EDGE_API_URL="http://$DEPLOY_HOST_VALUE:8081/api" \
+          CLOUD_API_URL="http://$DEPLOY_HOST_VALUE/api" \
+          ./apps/edge-frontend/build_web.sh
+
+      - name: Upload edge-frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-frontend-web
+          path: apps/edge-frontend/build/web/
 
       # Backend Build
       - name: Set up JDK 21
@@ -83,8 +113,12 @@ jobs:
           cache: maven
 
       - name: Build JAR
-        working-directory: ./backend
-        run: ./mvnw package -DskipTests --no-transfer-progress
+        working-directory: ./apps/cloud-backend
+        run: mvn package -DskipTests --no-transfer-progress
+
+      - name: Build Edge JAR
+        working-directory: ./apps/edge-backend
+        run: mvn package -DskipTests --no-transfer-progress
 
       # Docker Image
       - name: Set up Docker Buildx
@@ -100,9 +134,22 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./backend
+          context: ./apps/cloud-backend
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Edge Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/edge-backend
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.EDGE_IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}/${{ env.EDGE_IMAGE_NAME }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -112,6 +159,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
 
     environment:
       name: production
@@ -120,10 +171,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Flutter build
+      - name: Validate required deploy secrets
+        run: |
+          set -euo pipefail
+          [[ -n "${{ secrets.DEPLOY_HOST }}" ]] || (echo "DEPLOY_HOST is required" && exit 1)
+          [[ -n "${{ secrets.DEPLOY_USER }}" ]] || (echo "DEPLOY_USER is required" && exit 1)
+          [[ -n "${{ secrets.DEPLOY_PATH }}" ]] || (echo "DEPLOY_PATH is required" && exit 1)
+          [[ -n "${{ secrets.DEPLOY_SSH_KEY }}" ]] || (echo "DEPLOY_SSH_KEY is required" && exit 1)
+
+      - name: Download cloud-frontend artifact
         uses: actions/download-artifact@v4
         with:
-          name: flutter-web
+          name: cloud-frontend-web
           path: flutter-web/
 
       - name: Copy config files to server
@@ -147,6 +206,28 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GHCR_TOKEN,GITHUB_ACTOR,DEPLOY_PATH
           script: |
+            set -euo pipefail
+
+            # Deploy path ve env önkontrol
+            mkdir -p "$DEPLOY_PATH"
+            if [ ! -f "$DEPLOY_PATH/.env" ]; then
+              echo "ERROR: $DEPLOY_PATH/.env bulunamadı"
+              exit 1
+            fi
+
+            # Zaman damgalı yedek klasörü
+            BACKUP_DIR="$DEPLOY_PATH/backups"
+            TS="$(date +%Y%m%d-%H%M%S)"
+            mkdir -p "$BACKUP_DIR"
+
+            # Compose dosyası varsa önce DB yedeği al (best effort)
+            if [ -f "$DEPLOY_PATH/docker-compose.yml" ]; then
+              echo "DB backup alınıyor (best effort)..."
+              docker compose -f "$DEPLOY_PATH/docker-compose.yml" --env-file "$DEPLOY_PATH/.env" exec -T postgres sh -lc \
+                'pg_dump -U "${POSTGRES_USER:-quickserve}" "${POSTGRES_DB:-quickserve}"' \
+                > "$BACKUP_DIR/db-$TS.sql" || echo "WARN: DB backup alınamadı, deploy devam ediyor."
+            fi
+
             # Registry'ye giriş yap
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
@@ -160,10 +241,13 @@ jobs:
               alpine sh -c "cp -r /src/. /dst/"
 
             # Tüm servisleri başlat / güncelle
-            docker compose -f $DEPLOY_PATH/docker-compose.yml --env-file $DEPLOY_PATH/.env up -d
+            docker compose -f "$DEPLOY_PATH/docker-compose.yml" --env-file "$DEPLOY_PATH/.env" up -d
 
             # Eski image'ları temizle
             docker image prune -f
+
+            # Eski yedekleri temizle (son 10 yedek)
+            ls -1t "$BACKUP_DIR"/db-*.sql 2>/dev/null | tail -n +11 | xargs -r rm -f
 
             # Health check (Spring Boot başlaması için bekle)
             # Not: backend server context-path '/api' olduğu için health endpoint: /api/actuator/health
@@ -179,7 +263,7 @@ jobs:
               fi
 
               # 2) Backend container içinden (security/path doğrulaması için daha sağlıklı)
-              if docker compose -f $DEPLOY_PATH/docker-compose.yml exec -T backend sh -c ' \
+              if docker compose -f "$DEPLOY_PATH/docker-compose.yml" exec -T backend sh -c ' \
                 if command -v curl >/dev/null 2>&1; then \
                   curl -sf http://localhost:8080/api/actuator/health >/dev/null 2>&1; \
                 elif command -v wget >/dev/null 2>&1; then \
@@ -195,9 +279,9 @@ jobs:
               if [ $i -eq 12 ]; then
                 echo "Health check başarısız!"
                 echo "--- nginx logs ---"
-                docker compose -f $DEPLOY_PATH/docker-compose.yml logs --tail=200 nginx || true
+                docker compose -f "$DEPLOY_PATH/docker-compose.yml" logs --tail=200 nginx || true
                 echo "--- backend logs ---"
-                docker compose -f $DEPLOY_PATH/docker-compose.yml logs --tail=200 backend || true
+                docker compose -f "$DEPLOY_PATH/docker-compose.yml" logs --tail=200 backend || true
                 exit 1
               fi
             done

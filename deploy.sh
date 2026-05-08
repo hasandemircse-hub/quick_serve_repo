@@ -1,7 +1,7 @@
 #!/bin/bash
 # deploy.sh — Docker ve GitHub bağımsız, local'den direkt sunucuya deploy
 
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -19,22 +19,22 @@ BACKUP_COUNT=2
 
 # ─── 1. Backend Build ─────────────────────────────────────────────────────────
 echo "[1/6] Building backend (Maven)..."
-cd "$SCRIPT_DIR/backend"
-./mvnw clean package -DskipTests -q
+cd "$SCRIPT_DIR/apps/cloud-backend"
+mvn clean package -DskipTests -q
 cd "$SCRIPT_DIR"
 
 # ─── 2. Flutter Web Build ─────────────────────────────────────────────────────
-echo "[2/6] Building Flutter Web (API_URL=$API_URL)..."
-cd "$SCRIPT_DIR/frontend_flutter"
-flutter build web --dart-define=API_URL="$API_URL" --release -q
-cd "$SCRIPT_DIR"
+echo "[2/6] Building Flutter Web (cloud-frontend, API_URL=$API_URL)..."
+export CLOUD_API_URL="$API_URL"
+export WEB_ADMIN_URL="${WEB_ADMIN_URL:-http://$SERVER_HOST/auth/admin}"
+"$SCRIPT_DIR/apps/cloud-frontend/build_web.sh"
 
 # ─── 3. Docker image ──────────────────────────────────────────────────────────
 IMAGE_TAG="quickserve-backend:$(date +%Y%m%d-%H%M%S)"
 IMAGE_LATEST="quickserve-backend:latest"
 
 echo "[3/6] Building Docker image: $IMAGE_TAG"
-docker build -t "$IMAGE_TAG" -t "$IMAGE_LATEST" ./backend
+docker build -t "$IMAGE_TAG" -t "$IMAGE_LATEST" ./apps/cloud-backend
 
 # ─── 4. Save image ────────────────────────────────────────────────────────────
 echo "[4/6] Saving Docker image..."
@@ -43,22 +43,22 @@ docker save "$IMAGE_LATEST" -o "$TARFILE"
 
 # ─── 5. Transfer to server ────────────────────────────────────────────────────
 echo "[5/6] Transferring to $SERVER_HOST..."
-ssh "$SERVER_USER@$SERVER_HOST" "mkdir -p $SERVER_PATH/flutter_web"
+ssh "$SERVER_USER@$SERVER_HOST" "mkdir -p \"$SERVER_PATH/flutter_web\""
 scp "$TARFILE" "$SERVER_USER@$SERVER_HOST:/tmp/"
 scp "$SCRIPT_DIR/docker-compose.yml" "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/"
 scp "$SCRIPT_DIR/nginx.conf" "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/"
 # Flutter web dosyalarını kopyala
 rsync -az --delete \
-  "$SCRIPT_DIR/frontend_flutter/build/web/" \
+  "$SCRIPT_DIR/apps/cloud-frontend/build/web/" \
   "$SERVER_USER@$SERVER_HOST:$SERVER_PATH/flutter_web/"
 
-# ─── 6. Deploy on server ──────────────────────────────────────────────────────
+# ─── 6. Deploy on server ───────────────────────────────────────────────────────
 echo "[6/6] Deploying on server..."
 TARFILE_NAME=$(basename "$TARFILE")
 
 ssh "$SERVER_USER@$SERVER_HOST" bash << EOF
   set -e
-  cd $SERVER_PATH
+  cd "$SERVER_PATH"
 
   # Eski yedekleri yönet (son $BACKUP_COUNT adet tut)
   ls -t /tmp/quickserve-backend-*.tar 2>/dev/null | tail -n +$((BACKUP_COUNT+1)) | xargs -r rm -f
@@ -76,7 +76,7 @@ ssh "$SERVER_USER@$SERVER_HOST" bash << EOF
 
   # Flutter web dosyalarını volume'a kopyala
   docker run --rm \
-    -v $SERVER_PATH/flutter_web:/src:ro \
+    -v "$SERVER_PATH/flutter_web":/src:ro \
     -v quickserve_flutter_web:/dst \
     alpine sh -c "cp -r /src/. /dst/"
 
