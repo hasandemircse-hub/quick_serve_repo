@@ -417,6 +417,7 @@ Enrollment token → edge claim → node ONLINE/DEGRADED vb. Fleet özet ekranla
 | [uat_checklist_restaurant_operations.md](uat_checklist_restaurant_operations.md) | Kabul testi |
 | [load_test_order_payment_baseline.md](load_test_order_payment_baseline.md) | Yük testi |
 | [pos_provider_onboarding_checklist.md](pos_provider_onboarding_checklist.md) | POS pilot |
+| [git_remotes_and_migration.md](git_remotes_and_migration.md) | `origin` / `legacy` remote’lar, yeni repoya push |
 
 ---
 
