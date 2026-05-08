@@ -11,6 +11,8 @@ Restoran içi edge backend uygulaması (cloud backend'den bağımsız runtime).
 - Edge node/restaurant env tabanlı kimlik alanları
 
 ## Çalıştırma (lokal)
+Varsayılan SQLite yolu `./data/edge.db`; uygulama açılışta `data` klasörünü otomatik oluşturur. İsterseniz `EDGE_SQLITE_PATH` ile dosyayı başka yere alın.
+
 ```bash
 cd apps/edge-backend
 mvn spring-boot:run
