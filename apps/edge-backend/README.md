@@ -16,6 +16,13 @@ cd apps/edge-backend
 mvn spring-boot:run
 ```
 
+## Testler
+```bash
+cd apps/edge-backend
+mvn test
+```
+SQLite test dosyaları `./target/*.db` altında kalır; garip idempotency hatası görürseniz `mvn clean test` deneyin.
+
 ## Deploy notu
 - Lokal geliştirme için `docker-compose.edge.yml` build context: `apps/edge-backend`
 - Release dağıtımı için `docker-compose.edge.deploy.yml` + GHCR edge image (`quickserve-edge-backend`)

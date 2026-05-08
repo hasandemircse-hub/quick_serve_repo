@@ -7,6 +7,8 @@
 
 ---
 
+**Repo giriş:** Kök [README.md](../README.md) bu dosyaya ve `CLAUDE.md`'ye bağlanır.
+
 ## Bu belgeyi nasıl kullanmalısınız?
 
 | İhtiyaç | Bölüm |
