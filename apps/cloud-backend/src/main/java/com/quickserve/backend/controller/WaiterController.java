@@ -1,6 +1,8 @@
 package com.quickserve.backend.controller;
 
 import com.quickserve.backend.dto.call.WaiterCallResponse;
+import com.quickserve.backend.dto.menu.MenuItemResponse;
+import com.quickserve.backend.dto.order.OrderRequest;
 import com.quickserve.backend.dto.order.OrderResponse;
 import com.quickserve.backend.dto.payment.*;
 import com.quickserve.backend.dto.table.TableResponse;
@@ -26,6 +28,7 @@ public class WaiterController {
 
     private final TableService tableService;
     private final OrderService orderService;
+    private final MenuService menuService;
     private final PaymentService paymentService;
     private final WaiterCallService waiterCallService;
     private final SecurityUtils securityUtils;
@@ -35,6 +38,12 @@ public class WaiterController {
     public ResponseEntity<List<TableResponse>> getTables() {
         Long restaurantId = securityUtils.getCurrentUser().getRestaurant().getId();
         return ResponseEntity.ok(tableService.getTables(restaurantId));
+    }
+
+    @GetMapping("/menu")
+    public ResponseEntity<Map<String, List<MenuItemResponse>>> getMenu() {
+        Long restaurantId = securityUtils.getCurrentUser().getRestaurant().getId();
+        return ResponseEntity.ok(menuService.getMenuGrouped(restaurantId));
     }
 
     @GetMapping("/calls")
@@ -65,6 +74,14 @@ public class WaiterController {
     @PostMapping("/orders/{orderId}/deliver")
     public ResponseEntity<OrderResponse> markDelivered(@PathVariable Long orderId) {
         return ResponseEntity.ok(orderService.updateStatus(orderId, OrderStatus.DELIVERED));
+    }
+
+    @PostMapping("/sessions/{sessionId}/orders")
+    public ResponseEntity<OrderResponse> createOrderForSession(
+            @PathVariable Long sessionId,
+            @Valid @RequestBody OrderRequest request) {
+        requireSessionInCurrentRestaurant(sessionId);
+        return ResponseEntity.ok(orderService.createOrderForSession(sessionId, request));
     }
 
     @GetMapping("/sessions/{sessionId}/orders")

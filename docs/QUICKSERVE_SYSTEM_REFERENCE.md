@@ -3,7 +3,7 @@
 **Amaç:** Projenin *şu anki* teknik durumunu, topolojisini, dağıtımını, eksiklerini ve tipik iş/hata senaryolarını tek yerde toplamak. İnsan operatörü veya sonradan gelen geliştirici/AI asistanı birkaç dosyaya bakarak “ne var, ne yok, nasıl çalışır” sorusunu hızlıca cevaplayabilsin.
 
 **Son güncelleme:** 2026-05-08  
-**İlgili kısa rehberler:** [CLAUDE.md](../CLAUDE.md) (geliştirici komutları), [customer_and_support_sop_index.md](customer_and_support_sop_index.md), [cloud_edge_master_delivery_plan.md](cloud_edge_master_delivery_plan.md)
+**İlgili kısa rehberler:** [CLAUDE.md](../CLAUDE.md) (geliştirici komutları), [customer_and_support_sop_index.md](customer_and_support_sop_index.md), [cloud_edge_master_delivery_plan.md](cloud_edge_master_delivery_plan.md), [waiter_terminal_master_plan.md](waiter_terminal_master_plan.md) (garson terminali backlog)
 
 ---
 
@@ -411,6 +411,7 @@ Enrollment token → edge claim → node ONLINE/DEGRADED vb. Fleet özet ekranla
 | [PROJE_DOKUMANI.md](../PROJE_DOKUMANI.md) | Rol bazlı akışlar, eski tarihli ama ayrıntılı UI akışları |
 | [CLAUDE.md](../CLAUDE.md) | Komutlar, katman yapısı, bilinen sorunlar |
 | [cloud_edge_master_delivery_plan.md](cloud_edge_master_delivery_plan.md) | Program durumu, fazlar, günlük |
+| [waiter_terminal_master_plan.md](waiter_terminal_master_plan.md) | Garson el terminali: mevcut/eksik özellikler, API–UI eşlemesi, yapılacaklar backlog |
 | [cloud_edge_execution_plan.md](cloud_edge_execution_plan.md) | İcra planı |
 | [customer_and_support_sop_index.md](customer_and_support_sop_index.md) | Onboarding, SLA, UAT linkleri |
 | [edge_deploy_runbook.md](edge_deploy_runbook.md) | Edge deploy |

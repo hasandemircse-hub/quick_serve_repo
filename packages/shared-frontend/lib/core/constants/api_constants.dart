@@ -41,6 +41,7 @@ class ApiConstants {
 
   // Waiter
   static const String waiterTables = '/waiter/tables';
+  static const String waiterMenu = '/waiter/menu';
   static const String waiterCalls = '/waiter/calls';
   static const String waiterOrders = '/waiter/orders';
   static const String waiterPaymentsCash = '/waiter/payments/cash';

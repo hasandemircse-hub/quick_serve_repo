@@ -14,7 +14,10 @@ import '../../../core/widgets/offline_status_banner.dart';
 import '../../../core/widgets/sync_lag_indicator.dart';
 
 class CashierScreen extends StatefulWidget {
-  const CashierScreen({super.key});
+  /// Garson panelinden deep link: bu oturum açık masada seçilir.
+  final int? initialSessionId;
+
+  const CashierScreen({super.key, this.initialSessionId});
 
   @override
   State<CashierScreen> createState() => _CashierScreenState();
@@ -40,6 +43,7 @@ class _CashierScreenState extends State<CashierScreen> {
   int _openTableOrderSeed = 0;
   int? _restaurantId;
   bool _posDeviceEnabled = false;
+  bool _initialSessionHandled = false;
 
   @override
   void initState() {
@@ -81,6 +85,7 @@ class _CashierScreenState extends State<CashierScreen> {
         _tables = tables;
         _loading = false;
       });
+      await _trySelectInitialSession(tables);
       if (_selectedTable != null) {
         final selectedId = _selectedTable['id'];
         final updated = tables.where((t) => t['id'] == selectedId).toList();
@@ -107,6 +112,27 @@ class _CashierScreenState extends State<CashierScreen> {
           onRetry: _loadTables,
         );
       }
+    }
+  }
+
+  Future<void> _trySelectInitialSession(List<dynamic> tables) async {
+    if (_initialSessionHandled || widget.initialSessionId == null) return;
+    _initialSessionHandled = true;
+    final target = widget.initialSessionId!;
+    dynamic found;
+    for (final t in tables) {
+      final sid = (t['activeSessionId'] as num?)?.toInt();
+      if (sid == target) {
+        found = t;
+        break;
+      }
+    }
+    if (found != null) {
+      await _selectTable(found);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Oturum #$target bulunamadı veya kapandı')),
+      );
     }
   }
 

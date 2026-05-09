@@ -88,6 +88,29 @@ class OrderServiceTest {
     }
 
     @Test
+    void createOrderForSession_success() {
+        OrderItemRequest itemReq = new OrderItemRequest();
+        itemReq.setMenuItemId(1L);
+        itemReq.setQuantity(2);
+
+        OrderRequest req = new OrderRequest();
+        req.setItems(List.of(itemReq));
+
+        when(sessionRepository.findById(1L)).thenReturn(Optional.of(activeSession));
+        when(menuService.findItemById(1L)).thenReturn(menuItem);
+
+        Order savedOrder = Order.builder()
+                .id(2L).tableSession(activeSession).restaurant(activeSession.getTable().getRestaurant())
+                .status(OrderStatus.PENDING).totalAmount(BigDecimal.valueOf(100)).items(new ArrayList<>()).build();
+        when(orderRepository.save(any())).thenReturn(savedOrder);
+
+        OrderResponse response = orderService.createOrderForSession(1L, req);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(OrderStatus.PENDING);
+    }
+
+    @Test
     void createOrder_unavailableItem_throwsBusiness() {
         menuItem.setIsAvailable(false);
         OrderItemRequest itemReq = new OrderItemRequest();

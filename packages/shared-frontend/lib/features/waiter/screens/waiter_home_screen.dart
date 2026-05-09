@@ -51,6 +51,31 @@ class _WaiterHomeScreenState extends ConsumerState<WaiterHomeScreen>
       'calls',
       _handleCallEvent,
     );
+    WebSocketService.instance.subscribeRestaurant(
+      id,
+      'tables',
+      _handleTableEvent,
+    );
+  }
+
+  void _handleTableEvent(dynamic payload) {
+    if (!mounted) return;
+    _loadTablesOnly();
+    if (payload is! String) return;
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is! Map<String, dynamic>) return;
+      final status = (decoded['status'] ?? '').toString();
+      final tableNumber = decoded['tableNumber']?.toString();
+      if (status == 'OCCUPIED' && tableNumber != null && tableNumber.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Masa açıldı: $tableNumber'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (_) {/* sessiz */}
   }
 
   void _handleCallEvent(dynamic payload) {
@@ -156,15 +181,33 @@ class _WaiterHomeScreenState extends ConsumerState<WaiterHomeScreen>
     }
   }
 
+  /// WebSocket `tables` olayında tam panel yerine sadece masa ızgarasını güncelle.
+  Future<void> _loadTablesOnly() async {
+    try {
+      final res = await ApiClient.instance.get(ApiConstants.waiterTables);
+      if (!mounted) return;
+      setState(() {
+        _tables = List<dynamic>.from(res.data as List? ?? const []);
+      });
+    } catch (_) {/* sessiz — offline banner / manuel yenileme yedek */}
+  }
+
   @override
   Widget build(BuildContext context) {
     final pendingCallCount = _calls.length;
     final readyCount = _readyOrders.length;
+    final role = ref.watch(authProvider).state.role;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Garson Paneli'),
         actions: [
+          if (role == 'HEAD_WAITER')
+            IconButton(
+              icon: const Icon(Icons.restaurant_menu),
+              tooltip: 'Mutfak',
+              onPressed: () => context.push('/kitchen'),
+            ),
           IconButton(
             icon: const Icon(Icons.point_of_sale),
             tooltip: 'Kasa',
@@ -234,7 +277,10 @@ class _WaiterHomeScreenState extends ConsumerState<WaiterHomeScreen>
                 : TabBarView(
                     controller: _tabController,
                     children: [
-                      _TablesTab(tables: _tables, onRefresh: _loadData),
+                      _TablesTab(
+                        tables: _tables,
+                        onRefresh: _loadData,
+                      ),
                       _CallsTab(calls: _calls, onRefresh: _loadData),
                       _OrdersTab(orders: _readyOrders, onRefresh: _loadData),
                     ],
@@ -251,6 +297,7 @@ class _WaiterHomeScreenState extends ConsumerState<WaiterHomeScreen>
     if (id != null) {
       WebSocketService.instance.unsubscribe('/topic/restaurant/$id/orders');
       WebSocketService.instance.unsubscribe('/topic/restaurant/$id/calls');
+      WebSocketService.instance.unsubscribe('/topic/restaurant/$id/tables');
     }
     _tabController.dispose();
     super.dispose();
@@ -275,7 +322,9 @@ class _TablesTab extends StatelessWidget {
         return Card(
           color: isOccupied ? Colors.orange.shade100 : Colors.green.shade100,
           child: InkWell(
-            onTap: isOccupied ? () => _showTableActions(context, table) : null,
+            onTap: isOccupied
+                ? () => _showTableActions(context, table, onRefresh)
+                : null,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -294,26 +343,73 @@ class _TablesTab extends StatelessWidget {
     );
   }
 
-  void _showTableActions(BuildContext context, Map<String, dynamic> table) {
-    showModalBottomSheet(
+  void _showTableActions(
+    BuildContext context,
+    Map<String, dynamic> table,
+    VoidCallback onRefresh,
+  ) {
+    final sessionId = table['activeSessionId'];
+    final tableNumber = table['tableNumber']?.toString() ?? '?';
+    showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
-            leading: const Icon(Icons.check_circle, color: Colors.green),
-            title: const Text('Hesap Ödenerek Kalkıldı'),
+            leading: const Icon(Icons.summarize_outlined),
+            title: const Text('Masa özeti'),
+            subtitle: const Text('Tutarlar ve sipariş durumu'),
             onTap: () {
               Navigator.pop(ctx);
-              _closeSession(context, table['activeSessionId'], 'PAID_BILL');
+              _showSessionSummary(context, sessionId);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.add_shopping_cart),
+            title: const Text('Sipariş ekle'),
+            subtitle: const Text('Menüden mutfağa gönder'),
+            onTap: () async {
+              Navigator.pop(ctx);
+              final placed = await context.push<bool>(
+                '/waiter/session-order'
+                '?sessionId=$sessionId'
+                '&tableNumber=${Uri.encodeComponent(tableNumber)}',
+              );
+              if (placed == true && context.mounted) onRefresh();
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.point_of_sale),
+            title: const Text('Kasa (adisyon / ödeme)'),
+            onTap: () {
+              Navigator.pop(ctx);
+              context.go('/cashier?sessionId=$sessionId');
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.payments_outlined),
+            title: const Text('Hızlı nakit'),
+            subtitle: const Text('Tam kasaya girmeden nakit tahsil'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _showQuickCashDialog(context, sessionId, tableNumber, onRefresh);
+            },
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.check_circle, color: Colors.green),
+            title: const Text('Hesap ödenerek kalkıldı'),
+            onTap: () {
+              Navigator.pop(ctx);
+              _closeSession(context, sessionId, 'PAID_BILL', onRefresh);
             },
           ),
           ListTile(
             leading: const Icon(Icons.exit_to_app, color: Colors.orange),
-            title: const Text('İşlemsiz Kalkıldı'),
+            title: const Text('İşlemsiz kalkıldı'),
             onTap: () {
               Navigator.pop(ctx);
-              _closeSession(context, table['activeSessionId'], 'NO_BILL');
+              _closeSession(context, sessionId, 'NO_BILL', onRefresh);
             },
           ),
           ListTile(
@@ -321,7 +417,7 @@ class _TablesTab extends StatelessWidget {
             title: const Text('Diğer'),
             onTap: () {
               Navigator.pop(ctx);
-              _closeSession(context, table['activeSessionId'], 'OTHER');
+              _closeSession(context, sessionId, 'OTHER', onRefresh);
             },
           ),
         ],
@@ -329,7 +425,221 @@ class _TablesTab extends StatelessWidget {
     );
   }
 
-  Future<void> _closeSession(BuildContext context, dynamic sessionId, String reason) async {
+  Future<void> _showQuickCashDialog(
+    BuildContext context,
+    dynamic sessionId,
+    String tableNumber,
+    VoidCallback onRefresh,
+  ) async {
+    double? outstanding;
+    try {
+      final res = await ApiClient.instance.get(
+        '${ApiConstants.waiterSessionOrders}/$sessionId/financial-summary',
+      );
+      final data = Map<String, dynamic>.from(res.data as Map? ?? const {});
+      outstanding = (data['outstandingAmount'] as num?)?.toDouble();
+    } catch (e) {
+      if (context.mounted) {
+        showCriticalFallbackSnackBar(
+          context,
+          actionLabel: 'Ödeme özeti',
+          error: e,
+          onRetry: () => _showQuickCashDialog(context, sessionId, tableNumber, onRefresh),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
+
+    final ctrl = TextEditingController(
+      text: (outstanding != null && outstanding > 0.01)
+          ? outstanding.toStringAsFixed(2)
+          : '',
+    );
+    bool? submitted;
+    var amountRaw = '';
+    try {
+      submitted = await showDialog<bool>(
+        context: context,
+        builder: (dCtx) => AlertDialog(
+          title: Text('Hızlı nakit · Masa $tableNumber'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (outstanding != null)
+                Text(
+                  'Kalan borç: ${outstanding.toStringAsFixed(2)} ₺',
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                decoration: const InputDecoration(
+                  labelText: 'Tutar (₺)',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'POS veya satır satır dağıtım için tam kasa ekranını kullanın.',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dCtx, false),
+              child: const Text('İptal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dCtx, true),
+              child: const Text('Tahsil et'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      amountRaw = ctrl.text;
+      ctrl.dispose();
+    }
+
+    if (submitted != true || !context.mounted) return;
+
+    final amount = double.tryParse(amountRaw.replaceAll(',', '.')) ?? 0;
+    if (amount < 0.01) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Geçerli bir tutar girin')),
+      );
+      return;
+    }
+
+    final noDebt = outstanding == null || outstanding <= 0.01;
+    if (noDebt) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (cCtx) => AlertDialog(
+          title: const Text('Bu masada borç yok'),
+          content: Text(
+            'Bu tutar fazla ödeme olarak kaydedilecek:\n${amount.toStringAsFixed(2)} ₺',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(cCtx, false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(cCtx, true),
+              child: const Text('Devam'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
+    try {
+      await ApiClient.instance.post(
+        '${ApiConstants.waiterSessionOrders}/$sessionId/payments/cash',
+        data: {
+          'method': 'CASH',
+          'amount': amount,
+          'tipAmount': 0,
+        },
+      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nakit tahsilat kaydedildi'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        onRefresh();
+      }
+    } catch (e) {
+      if (context.mounted) {
+        showCriticalFallbackSnackBar(
+          context,
+          actionLabel: 'Nakit tahsilat',
+          error: e,
+          onRetry: () => _showQuickCashDialog(context, sessionId, tableNumber, onRefresh),
+        );
+      }
+    }
+  }
+
+  Future<void> _showSessionSummary(BuildContext context, dynamic sessionId) async {
+    try {
+      final res = await ApiClient.instance.get(
+        '${ApiConstants.waiterSessionOrders}/$sessionId/financial-summary',
+      );
+      if (!context.mounted) return;
+      final data = Map<String, dynamic>.from(res.data as Map? ?? const {});
+      final total = (data['sessionTotal'] as num?)?.toDouble() ?? 0;
+      final paid = (data['paidTotal'] as num?)?.toDouble() ?? 0;
+      final out = (data['outstandingAmount'] as num?)?.toDouble() ?? 0;
+      final orders = List<dynamic>.from(data['orders'] as List? ?? const []);
+      await showDialog<void>(
+        context: context,
+        builder: (dCtx) => AlertDialog(
+          title: const Text('Masa özeti'),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Ara toplam: ${total.toStringAsFixed(2)} ₺'),
+                Text('Ödenen: ${paid.toStringAsFixed(2)} ₺'),
+                Text(
+                  'Kalan: ${out.toStringAsFixed(2)} ₺',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const Divider(),
+                if (orders.isEmpty)
+                  const Text('Bu oturumda sipariş yok')
+                else
+                  ...orders.map((o) {
+                    final m = o is Map
+                        ? Map<String, dynamic>.from(o)
+                        : <String, dynamic>{};
+                    final oid = m['orderId'];
+                    final st = m['orderStatus'] ?? '';
+                    final ost = (m['outstandingAmount'] as num?)?.toDouble() ?? 0;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text('#$oid · $st · kalan ${ost.toStringAsFixed(2)} ₺'),
+                    );
+                  }),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dCtx),
+              child: const Text('Kapat'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        showCriticalFallbackSnackBar(
+          context,
+          actionLabel: 'Özet yükleme',
+          error: e,
+          onRetry: () => _showSessionSummary(context, sessionId),
+        );
+      }
+    }
+  }
+
+  Future<void> _closeSession(
+    BuildContext context,
+    dynamic sessionId,
+    String reason,
+    VoidCallback onRefresh,
+  ) async {
     try {
       await ApiClient.instance.post('/waiter/sessions/$sessionId/close',
           data: {'reason': reason});

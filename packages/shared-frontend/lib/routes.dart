@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'core/providers/auth_provider.dart';
@@ -7,17 +8,21 @@ import 'features/customer/screens/cart_screen.dart';
 import 'features/customer/screens/payment_screen.dart';
 import 'features/customer/screens/review_screen.dart';
 import 'features/waiter/screens/waiter_home_screen.dart';
+import 'features/waiter/screens/waiter_session_order_screen.dart';
 import 'features/kitchen/screens/kitchen_screen.dart';
 import 'features/admin/screens/admin_dashboard_screen.dart';
 import 'features/superadmin/screens/superadmin_screen.dart';
 import 'features/customer/screens/qr_scan_screen.dart';
 import 'features/cashier/screens/cashier_screen.dart';
 
+/// Cloud müşteri uygulaması `/scan`; edge personel uygulaması bootstrap’ta `/login` ile override edilir.
+final appInitialLocationProvider = Provider<String>((ref) => '/scan');
+
 final routerProvider = Provider<GoRouter>((ref) {
   final authNotifier = ref.watch(authProvider.notifier);
 
   return GoRouter(
-    initialLocation: '/scan',
+    initialLocation: ref.watch(appInitialLocationProvider),
     refreshListenable: authNotifier,
     redirect: (context, state) {
       final isAuthenticated = authNotifier.state.isAuthenticated;
@@ -119,8 +124,29 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const WaiterHomeScreen(),
       ),
       GoRoute(
+        path: '/waiter/session-order',
+        builder: (context, state) {
+          final sessionIdStr = state.uri.queryParameters['sessionId'] ?? '';
+          final tableNumber = state.uri.queryParameters['tableNumber'] ?? '?';
+          final sessionId = int.tryParse(sessionIdStr) ?? 0;
+          if (sessionId <= 0) {
+            return const Scaffold(
+              body: Center(child: Text('Geçersiz oturum')),
+            );
+          }
+          return WaiterSessionOrderScreen(
+            sessionId: sessionId,
+            tableNumber: tableNumber,
+          );
+        },
+      ),
+      GoRoute(
         path: '/cashier',
-        builder: (context, state) => const CashierScreen(),
+        builder: (context, state) {
+          final sid = state.uri.queryParameters['sessionId'];
+          final initialSessionId = sid != null ? int.tryParse(sid) : null;
+          return CashierScreen(initialSessionId: initialSessionId);
+        },
       ),
 
       // ─── Mutfak ─────────────────────────────────────────────────────────

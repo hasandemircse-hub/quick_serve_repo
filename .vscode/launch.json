@@ -12,6 +12,16 @@
             },
             "args": "",
             "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "java",
+            "name": "Spring Boot-EdgeBackendApplication<edge-backend>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.quickserve.edgebackend.EdgeBackendApplication",
+            "projectName": "edge-backend",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
         }
     ]
 }

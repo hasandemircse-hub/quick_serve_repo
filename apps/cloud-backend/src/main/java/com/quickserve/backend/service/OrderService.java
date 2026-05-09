@@ -37,6 +37,23 @@ public class OrderService {
             throw new BusinessException("Bu oturum artık aktif değil");
         }
 
+        return persistNewOrder(session, request);
+    }
+
+    /**
+     * Personel (garson): oturum kimliği ile sipariş oluşturur. Restoran doğrulaması controller'da yapılır.
+     */
+    @Transactional
+    public OrderResponse createOrderForSession(Long sessionId, OrderRequest request) {
+        TableSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Oturum bulunamadı"));
+        if (!session.getIsActive()) {
+            throw new BusinessException("Bu oturum artık aktif değil");
+        }
+        return persistNewOrder(session, request);
+    }
+
+    private OrderResponse persistNewOrder(TableSession session, OrderRequest request) {
         Restaurant restaurant = session.getTable().getRestaurant();
 
         Order order = Order.builder()
@@ -71,7 +88,6 @@ public class OrderService {
         order.setTotalAmount(total);
         Order saved = orderRepository.save(order);
 
-        // Mutfak ve admin'e WebSocket bildirimi
         OrderResponse dto = toDto(saved);
         notificationService.publishToRestaurant(restaurant.getId(), "orders", dto);
 

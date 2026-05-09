@@ -24,6 +24,11 @@ services:
       context: ./apps/cloud-backend
     image: quickserve-cloud-backend:local
     container_name: quickserve_cloud_backend
+    networks:
+      default:
+        aliases:
+          # nginx.conf içindeki proxy_pass hedefi `backend` (kök compose ile uyum)
+          - backend
     depends_on:
       cloud-postgres:
         condition: service_healthy
