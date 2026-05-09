@@ -74,8 +74,10 @@ cp .env.edge.example .env.edge
 Geliştirme/lokal mod:
 
 ```bash
-docker compose --env-file .env.edge -f docker-compose.edge.yml up -d
+docker compose --env-file .env.edge -f docker-compose.edge.yml up -d --build
 ```
+
+Aynı dosya **edge-frontend** (Flutter web) imajını da üretir; `.env.edge` içinde `EDGE_API_URL` ve `CLOUD_API_URL` **personel tarayıcısından** erişilen tam taban adresler olmalı (ör. `http://192.168.1.50:8081/api`). İlk build birkaç dakika sürebilir.
 
 Release (tag pin + pull policy) modu:
 

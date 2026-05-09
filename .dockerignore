@@ -1,0 +1,13 @@
+# Repo kökü build context (edge-frontend imajı). Bağlamı küçük tutar.
+.git
+.github
+docs
+**/.dart_tool
+**/build
+**/target
+*.iml
+.idea
+.vscode
+apps/cloud-backend
+apps/cloud-frontend
+apps/edge-backend

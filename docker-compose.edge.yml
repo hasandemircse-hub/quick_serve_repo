@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   edge-backend:
     build:
@@ -31,6 +29,22 @@ services:
       - "8081:8081"
     volumes:
       - edge_sqlite_data:/data
+    restart: unless-stopped
+
+  # Flutter web imaj içinde derlenir; API URL’leri .env.edge → build args.
+  edge-frontend:
+    build:
+      context: .
+      dockerfile: apps/edge-frontend/Dockerfile
+      args:
+        EDGE_API_URL: ${EDGE_API_URL:-http://127.0.0.1:8081/api}
+        CLOUD_API_URL: ${CLOUD_API_URL:-http://127.0.0.1:8080/api}
+    image: quickserve-edge-frontend:local
+    container_name: quickserve_edge_frontend
+    depends_on:
+      - edge-backend
+    ports:
+      - "${EDGE_FRONTEND_PORT:-8082}:80"
     restart: unless-stopped
 
 volumes:
