@@ -83,6 +83,7 @@ jobs:
           DEPLOY_HOST_VALUE="${{ secrets.DEPLOY_HOST }}"
           if [ -z "$DEPLOY_HOST_VALUE" ]; then DEPLOY_HOST_VALUE="localhost"; fi
           CLOUD_API_URL="http://$DEPLOY_HOST_VALUE/api" \
+          EDGE_API_URL="http://$DEPLOY_HOST_VALUE/api" \
           WEB_ADMIN_URL="http://$DEPLOY_HOST_VALUE/auth/admin" \
           ./apps/cloud-frontend/build_web.sh
 

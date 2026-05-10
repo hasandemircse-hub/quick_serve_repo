@@ -42,9 +42,10 @@ ENV_FILE="${CLOUD_VM_ENV_FILE:-.env.cloud}"
 COMPOSE_FILE="${CLOUD_VM_COMPOSE_FILE:-docker-compose.cloud.yml}"
 
 export CLOUD_API_URL="${CLOUD_API_URL:-http://${VM_HOST}/api}"
+export EDGE_API_URL="${EDGE_API_URL:-$CLOUD_API_URL}"
 export WEB_ADMIN_URL="${WEB_ADMIN_URL:-http://${VM_HOST}/auth/admin}"
 
-echo "==> Web build (CLOUD_API_URL=$CLOUD_API_URL)"
+echo "==> Web build (CLOUD_API_URL=$CLOUD_API_URL EDGE_API_URL=$EDGE_API_URL)"
 "$ROOT/apps/cloud-frontend/build_web.sh"
 
 echo "==> tar+ssh → ${REMOTE}:~/${WEB_SUB}/"
