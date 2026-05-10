@@ -1,8 +1,10 @@
 name: CI/CD Pipeline
 
+# Otomatik tetikleme kapalı (her commit'te çalışmaz). Canlıda CI/CD için
+# aşağıdaki push bloğunun yorumunu kaldırın; şimdilik yalnızca manuel çalıştırma.
 on:
-  push:
-    branches: [main]
+  # push:
+  #   branches: [main]
   workflow_dispatch:
 
 concurrency:

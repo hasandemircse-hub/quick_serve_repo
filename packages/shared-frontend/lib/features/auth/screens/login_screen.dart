@@ -62,69 +62,77 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.restaurant_menu, size: 64, color: Color(0xFFE53935)),
-              const SizedBox(height: 16),
-              Text('QuickServe',
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.restaurant_menu, size: 64, color: Color(0xFFE53935)),
+                const SizedBox(height: 16),
+                Text(
+                  'QuickServe',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text('Personel Girişi',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Colors.grey)),
-              const SizedBox(height: 40),
-              Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    TextFormField(
-                      controller: _usernameCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Kullanıcı Adı',
-                        prefixIcon: Icon(Icons.person_outline),
-                        border: OutlineInputBorder(),
+                        fontWeight: FontWeight.bold,
                       ),
-                      validator: (v) => v == null || v.isEmpty ? 'Zorunlu alan' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passwordCtrl,
-                      obscureText: _obscure,
-                      decoration: InputDecoration(
-                        labelText: 'Şifre',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        border: const OutlineInputBorder(),
-                        suffixIcon: IconButton(
-                          icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
-                          onPressed: () => setState(() { _obscure = !_obscure; }),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Personel Girişi',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Colors.grey,
+                      ),
+                ),
+                const SizedBox(height: 40),
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        controller: _usernameCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Kullanıcı Adı',
+                          prefixIcon: Icon(Icons.person_outline),
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (v) => v == null || v.isEmpty ? 'Zorunlu alan' : null,
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _passwordCtrl,
+                        obscureText: _obscure,
+                        decoration: InputDecoration(
+                          labelText: 'Şifre',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          border: const OutlineInputBorder(),
+                          suffixIcon: IconButton(
+                            icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+                            onPressed: () => setState(() => _obscure = !_obscure),
+                          ),
+                        ),
+                        validator: (v) => v == null || v.isEmpty ? 'Zorunlu alan' : null,
+                        onFieldSubmitted: (_) => _login(),
+                      ),
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Text(_error!, style: const TextStyle(color: Colors.red)),
+                      ],
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: FilledButton(
+                          onPressed: _loading ? null : _login,
+                          child: _loading
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : const Text('Giriş Yap', style: TextStyle(fontSize: 16)),
                         ),
                       ),
-                      validator: (v) => v == null || v.isEmpty ? 'Zorunlu alan' : null,
-                      onFieldSubmitted: (_) => _login(),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(_error!, style: const TextStyle(color: Colors.red)),
                     ],
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: FilledButton(
-                        onPressed: _loading ? null : _login,
-                        child: _loading
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text('Giriş Yap', style: TextStyle(fontSize: 16)),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
