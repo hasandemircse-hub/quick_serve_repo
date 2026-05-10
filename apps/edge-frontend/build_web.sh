@@ -20,8 +20,7 @@ flutter build web \
   --dart-define=API_URL="$EDGE_API_URL" \
   --dart-define=EDGE_API_URL="$EDGE_API_URL" \
   --dart-define=CLOUD_API_URL="$CLOUD_API_URL" \
-  --release \
-  --web-renderer canvaskit
+  --release
 popd >/dev/null
 
 echo "edge-frontend build ready: $OUT_DIR"

@@ -20,8 +20,7 @@ flutter build web \
   --dart-define=API_URL="$CLOUD_API_URL" \
   --dart-define=CLOUD_API_URL="$CLOUD_API_URL" \
   --dart-define=WEB_ADMIN_URL="$WEB_ADMIN_URL" \
-  --release \
-  --web-renderer canvaskit
+  --release
 popd >/dev/null
 
 echo "cloud-frontend build ready: $OUT_DIR"
