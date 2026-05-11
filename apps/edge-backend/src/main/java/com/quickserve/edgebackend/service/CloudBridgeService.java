@@ -6,6 +6,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.socket.WebSocketHttpHeaders;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,17 +17,26 @@ import java.util.Map;
 public class CloudBridgeService {
 
     private final RestClient restClient;
+    private final String cloudBaseUrl;
     private final String bridgeJwtToken;
     private final boolean skipCloudJwt;
+    private final long edgeRestaurantId;
 
     public CloudBridgeService(
             @Value("${app.edge.cloud-base-url:http://localhost:8080/api}") String cloudBaseUrl,
             @Value("${app.edge.bridge-jwt-token:}") String bridgeJwtToken,
-            @Value("${app.edge.skip-cloud-jwt:false}") boolean skipCloudJwt
+            @Value("${app.edge.skip-cloud-jwt:false}") boolean skipCloudJwt,
+            @Value("${app.edge.restaurant-id:0}") long edgeRestaurantId
     ) {
-        this.restClient = RestClient.builder().baseUrl(cloudBaseUrl).build();
+        this.cloudBaseUrl = cloudBaseUrl.trim();
+        this.restClient = RestClient.builder().baseUrl(this.cloudBaseUrl).build();
         this.bridgeJwtToken = normalizeBridgeJwt(bridgeJwtToken);
         this.skipCloudJwt = skipCloudJwt;
+        this.edgeRestaurantId = edgeRestaurantId;
+    }
+
+    public String getCloudBaseUrl() {
+        return cloudBaseUrl;
     }
 
     public boolean skipCloudJwt() {
@@ -107,6 +118,13 @@ public class CloudBridgeService {
         }
     }
 
+    /** STOMP / SockJS el sıkışması için Authorization header. */
+    public void stampAuth(WebSocketHttpHeaders headers) {
+        if (!skipCloudJwt && bridgeJwtLooksPlausible()) {
+            headers.add(HttpHeaders.AUTHORIZATION, "Bearer " + bridgeJwtToken);
+        }
+    }
+
     public List<Map<String, Object>> fetchWaiterTables() {
         var spec = restClient.get()
                 .uri("/waiter/tables")
@@ -149,15 +167,61 @@ public class CloudBridgeService {
                 .body(new ParameterizedTypeReference<Map<String, Object>>() {});
     }
 
+    /**
+     * Cloud'da uygulanmış edge olayları (cursor).
+     *
+     * @param sinceId exclusive; 0 veya negatif ise since gönderilmez
+     */
+    public String fetchOpsChangesRaw(long sinceId, int limit) {
+        try {
+            StringBuilder uri = new StringBuilder("/edge/ops/changes?restaurantId=").append(edgeRestaurantId);
+            uri.append("&limit=").append(limit);
+            if (sinceId > 0) {
+                uri.append("&since=").append(sinceId);
+            }
+            var spec = restClient.get()
+                    .uri(uri.toString())
+                    .accept(MediaType.APPLICATION_JSON);
+            applyBearerIfPresent(spec);
+            return spec.retrieve()
+                    .body(String.class);
+        } catch (RestClientException ex) {
+            return null;
+        }
+    }
+
+    public void postHeartbeat(long restaurantId, String nodeName, String lastOutboxFlushAtUtcIso) {
+        var body = new LinkedHashMap<String, Object>();
+        body.put("restaurantId", restaurantId);
+        body.put("nodeName", nodeName);
+        if (lastOutboxFlushAtUtcIso != null && !lastOutboxFlushAtUtcIso.isBlank()) {
+            body.put("lastOutboxFlushAtUtc", lastOutboxFlushAtUtcIso);
+        }
+        var spec = restClient.post()
+                .uri("/edge/nodes/heartbeat")
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(body);
+        applyBearerIfPresent(spec);
+        spec.retrieve()
+                .toBodilessEntity();
+    }
+
+    public long configuredRestaurantId() {
+        return edgeRestaurantId;
+    }
+
     public boolean pushEdgeEvent(String eventId, String eventType, String payloadJson) {
+        var body = new LinkedHashMap<String, Object>();
+        body.put("eventId", eventId);
+        body.put("eventType", eventType);
+        body.put("payloadJson", payloadJson != null ? payloadJson : "");
+        if (skipCloudJwt && edgeRestaurantId > 0) {
+            body.put("restaurantId", edgeRestaurantId);
+        }
         var spec = restClient.post()
                 .uri("/edge/sync/events")
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(Map.of(
-                        "eventId", eventId,
-                        "eventType", eventType,
-                        "payloadJson", payloadJson
-                ));
+                .body(body);
         applyBearerIfPresent(spec);
         spec.retrieve()
                 .toBodilessEntity();

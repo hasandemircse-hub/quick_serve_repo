@@ -11,7 +11,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +25,7 @@ public class EdgeNodeService {
 
     private final EdgeNodeRepository edgeNodeRepository;
     private final RestaurantService restaurantService;
+    private final NotificationService notificationService;
 
     @Transactional
     public EdgeNodeResponse create(Long restaurantId, EdgeNodeRequest request) {
@@ -76,6 +83,41 @@ public class EdgeNodeService {
         edgeNodeRepository.delete(findEntityById(edgeNodeId));
     }
 
+    /**
+     * Edge cihazından periyodik heartbeat: nodeName ile eşleşen kaydı günceller.
+     * {@code lastOutboxFlushAtUtcIso} doluysa {@link EdgeNode#setLastSyncAt(LocalDateTime)} buna göre set edilir.
+     */
+    @Transactional
+    public EdgeNodeResponse recordHeartbeat(Long restaurantId, String nodeName, String lastOutboxFlushAtUtcIso) {
+        EdgeNode node = edgeNodeRepository.findFirstByRestaurant_IdAndNodeName(restaurantId, nodeName)
+                .orElseThrow(() -> new ResourceNotFoundException("EdgeNode not found for restaurantId="
+                        + restaurantId + " nodeName=" + nodeName));
+        LocalDateTime now = LocalDateTime.now();
+        node.setLastSeenAt(now);
+        if (lastOutboxFlushAtUtcIso != null && !lastOutboxFlushAtUtcIso.isBlank()) {
+            try {
+                Instant flush = Instant.parse(lastOutboxFlushAtUtcIso.trim());
+                node.setLastSyncAt(LocalDateTime.ofInstant(flush, ZoneId.systemDefault()));
+            } catch (DateTimeParseException ignored) {
+                // lastSyncAt değiştirme
+            }
+        }
+        node.setStatus(EdgeNodeStatus.ONLINE);
+        EdgeNode saved = edgeNodeRepository.save(node);
+        EdgeNodeResponse dto = toDto(saved);
+        publishNodeStatusWs(restaurantId, dto);
+        return dto;
+    }
+
+    private void publishNodeStatusWs(Long restaurantId, EdgeNodeResponse dto) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("nodeName", dto.getNodeName());
+        payload.put("status", dto.getStatus() != null ? dto.getStatus().name() : null);
+        payload.put("lastSeenAt", dto.getLastSeenAt() != null ? dto.getLastSeenAt().toString() : null);
+        payload.put("lastSyncAt", dto.getLastSyncAt() != null ? dto.getLastSyncAt().toString() : null);
+        notificationService.publishToRestaurant(restaurantId, "edge_nodes", payload);
+    }
+
     private EdgeNode findEntityById(Long edgeNodeId) {
         return edgeNodeRepository.findById(edgeNodeId)
                 .orElseThrow(() -> new ResourceNotFoundException("EdgeNode", edgeNodeId));
@@ -107,6 +149,7 @@ public class EdgeNodeService {
                 .status(edgeNode.getStatus())
                 .isActive(edgeNode.getIsActive())
                 .lastSeenAt(edgeNode.getLastSeenAt())
+                .lastSyncAt(edgeNode.getLastSyncAt())
                 .createdAt(edgeNode.getCreatedAt())
                 .updatedAt(edgeNode.getUpdatedAt())
                 .build();

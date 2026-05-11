@@ -720,6 +720,30 @@ public class PaymentService {
         return rows;
     }
 
+    /**
+     * Edge bridge senkronu: ödeme tamamlandı (idempotent; zaten COMPLETED ise no-op).
+     */
+    @Transactional
+    public void markPaymentCompletedFromEdgeBridge(Long restaurantId, Long paymentId, PaymentMethod method) {
+        Payment p = paymentRepository.findById(paymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment", paymentId));
+        if (!p.getRestaurant().getId().equals(restaurantId)) {
+            throw new BusinessException("Ödeme restorana ait değil");
+        }
+        if (p.getStatus() == PaymentStatus.COMPLETED) {
+            return;
+        }
+        if (p.getStatus() == PaymentStatus.REFUNDED) {
+            throw new BusinessException("İade edilmiş ödeme güncellenemez");
+        }
+        if (method != null) {
+            p.setMethod(method);
+        }
+        p.setStatus(PaymentStatus.COMPLETED);
+        p.setProviderRawStatus("EDGE_BRIDGE_SYNC");
+        paymentRepository.save(p);
+    }
+
     private TableSession getActiveSession(String sessionToken) {
         TableSession session = sessionRepository.findBySessionToken(sessionToken)
                 .orElseThrow(() -> new ResourceNotFoundException("Oturum bulunamadı"));

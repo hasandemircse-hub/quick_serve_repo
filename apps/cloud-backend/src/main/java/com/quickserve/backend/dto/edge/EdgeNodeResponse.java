@@ -17,6 +17,7 @@ public class EdgeNodeResponse {
     private EdgeNodeStatus status;
     private Boolean isActive;
     private LocalDateTime lastSeenAt;
+    private LocalDateTime lastSyncAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

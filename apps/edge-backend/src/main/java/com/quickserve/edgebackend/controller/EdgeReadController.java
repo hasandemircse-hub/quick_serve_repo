@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.quickserve.edgebackend.repository.EdgeSnapshotRepository;
 import com.quickserve.edgebackend.service.CloudBridgeService;
+import com.quickserve.edgebackend.service.EdgeOpsLocalCacheService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,17 +25,20 @@ public class EdgeReadController {
 
     private final CloudBridgeService cloudBridgeService;
     private final EdgeSnapshotRepository snapshotRepository;
+    private final EdgeOpsLocalCacheService edgeOpsLocalCacheService;
     private final ObjectMapper objectMapper;
     private final long restaurantId;
 
     public EdgeReadController(
             CloudBridgeService cloudBridgeService,
             EdgeSnapshotRepository snapshotRepository,
+            EdgeOpsLocalCacheService edgeOpsLocalCacheService,
             ObjectMapper objectMapper,
             @Value("${app.edge.restaurant-id:0}") long restaurantId
     ) {
         this.cloudBridgeService = cloudBridgeService;
         this.snapshotRepository = snapshotRepository;
+        this.edgeOpsLocalCacheService = edgeOpsLocalCacheService;
         this.objectMapper = objectMapper;
         this.restaurantId = restaurantId;
     }
@@ -56,6 +60,49 @@ public class EdgeReadController {
     private static boolean snapshotHasNonEmptyTables(JsonNode root) {
         JsonNode n = root.path("tables");
         return n.isArray() && n.size() > 0;
+    }
+
+    private void patchOrderRow(Map<String, Object> row) {
+        Object idObj = row.containsKey("orderId") ? row.get("orderId") : row.get("id");
+        if (idObj == null) {
+            return;
+        }
+        String oid = String.valueOf(idObj);
+        edgeOpsLocalCacheService.getOrderStatus(oid).ifPresent(st -> row.put("status", st));
+    }
+
+    private void patchOrderList(List<Map<String, Object>> list) {
+        if (list == null) {
+            return;
+        }
+        for (Map<String, Object> row : list) {
+            patchOrderRow(row);
+        }
+    }
+
+    private void patchCallRow(Map<String, Object> row) {
+        Object idObj = row.get("id");
+        if (idObj == null) {
+            return;
+        }
+        String cid = String.valueOf(idObj);
+        edgeOpsLocalCacheService.getCallStatus(cid).ifPresent(st -> row.put("status", st));
+        edgeOpsLocalCacheService.getCallWaiterId(cid).ifPresent(wid -> {
+            try {
+                row.put("assignedToUserId", Long.parseLong(wid));
+            } catch (NumberFormatException ignored) {
+                row.put("assignedToUserId", wid);
+            }
+        });
+    }
+
+    private void patchCallList(List<Map<String, Object>> list) {
+        if (list == null) {
+            return;
+        }
+        for (Map<String, Object> row : list) {
+            patchCallRow(row);
+        }
     }
 
     private static boolean snapshotHasAnyMenuItems(JsonNode root) {
@@ -130,6 +177,7 @@ public class EdgeReadController {
                 List<Map<String, Object>> out = objectMapper.convertValue(
                         calls,
                         new TypeReference<List<Map<String, Object>>>() {});
+                patchCallList(out);
                 return ResponseEntity.ok(out);
             }
         }
@@ -145,6 +193,7 @@ public class EdgeReadController {
                 List<Map<String, Object>> out = objectMapper.convertValue(
                         orders,
                         new TypeReference<List<Map<String, Object>>>() {});
+                patchOrderList(out);
                 return ResponseEntity.ok(out);
             }
         }
@@ -263,22 +312,27 @@ public class EdgeReadController {
                 List<Map<String, Object>> out = objectMapper.convertValue(
                         orders,
                         new TypeReference<List<Map<String, Object>>>() {});
+                patchOrderList(out);
                 return ResponseEntity.ok(out);
             }
         }
         if (cloudBridgeService.shouldTryCloudLive()) {
             try {
-                return ResponseEntity.ok(cloudBridgeService.fetchKitchenOrders());
+                List<Map<String, Object>> live = cloudBridgeService.fetchKitchenOrders();
+                patchOrderList(live);
+                return ResponseEntity.ok(live);
             } catch (Exception ignored) {
                 // fallthrough mock
             }
         }
-        return ResponseEntity.ok(
+        List<Map<String, Object>> mock = new ArrayList<>(
                 List.of(
-                        Map.of("orderId", 101, "tableName", "Masa 1", "status", "PREPARING"),
-                        Map.of("orderId", 102, "tableName", "Masa 4", "status", "READY")
+                        new LinkedHashMap<>(Map.of("orderId", 101, "tableName", "Masa 1", "status", "PREPARING")),
+                        new LinkedHashMap<>(Map.of("orderId", 102, "tableName", "Masa 4", "status", "READY"))
                 )
         );
+        patchOrderList(mock);
+        return ResponseEntity.ok(mock);
     }
 
     @GetMapping("/admin/summary")

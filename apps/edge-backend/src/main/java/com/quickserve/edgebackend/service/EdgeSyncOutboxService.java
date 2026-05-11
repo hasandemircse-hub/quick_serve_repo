@@ -16,13 +16,22 @@ public class EdgeSyncOutboxService {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    public void enqueueEvent(String aggregateType, String aggregateId, String eventType, String payloadJson) {
+    /**
+     * @return outbox satır id (cloud idempotency anahtarı)
+     */
+    public String enqueueEvent(String aggregateType, String aggregateId, String eventType, String payloadJson) {
+        String id = UUID.randomUUID().toString();
+        enqueueEventWithId(id, aggregateType, aggregateId, eventType, payloadJson);
+        return id;
+    }
+
+    public void enqueueEventWithId(String id, String aggregateType, String aggregateId, String eventType, String payloadJson) {
         jdbcTemplate.update("""
                         INSERT INTO edge_sync_outbox (
                             id, aggregate_type, aggregate_id, event_type, payload_json, status, retry_count, next_attempt_at, created_at, updated_at
                         ) VALUES (?, ?, ?, ?, ?, 'PENDING', 0, NULL, datetime('now'), datetime('now'))
                         """,
-                UUID.randomUUID().toString(), aggregateType, aggregateId, eventType, payloadJson);
+                id, aggregateType, aggregateId, eventType, payloadJson);
     }
 
     public List<OutboxEvent> pollPendingEvents(int batchSize) {

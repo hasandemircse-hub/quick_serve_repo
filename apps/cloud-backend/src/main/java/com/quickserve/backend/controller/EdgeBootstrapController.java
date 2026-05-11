@@ -5,10 +5,12 @@ import com.quickserve.backend.dto.menu.MenuItemResponse;
 import com.quickserve.backend.dto.order.OrderResponse;
 import com.quickserve.backend.dto.table.TableResponse;
 import com.quickserve.backend.dto.user.UserResponse;
+import com.quickserve.backend.config.EdgeCloudLabBridge;
 import com.quickserve.backend.entity.User;
 import com.quickserve.backend.enums.OrderStatus;
 import com.quickserve.backend.enums.UserRole;
 import com.quickserve.backend.exception.BusinessException;
+import com.quickserve.backend.repository.RestaurantRepository;
 import com.quickserve.backend.security.SecurityUtils;
 import com.quickserve.backend.service.MenuService;
 import com.quickserve.backend.service.OrderService;
@@ -41,6 +43,8 @@ public class EdgeBootstrapController {
 
     public static final int SNAPSHOT_SCHEMA_VERSION = 1;
 
+    private final EdgeCloudLabBridge edgeCloudLabBridge;
+    private final RestaurantRepository restaurantRepository;
     private final SecurityUtils securityUtils;
     private final TableService tableService;
     private final MenuService menuService;
@@ -53,8 +57,7 @@ public class EdgeBootstrapController {
     public ResponseEntity<Map<String, Object>> snapshot(
             @RequestParam(required = false) Long restaurantId
     ) {
-        User user = securityUtils.getCurrentUser();
-        Long rid = resolveRestaurantId(user, restaurantId);
+        Long rid = resolveRestaurantIdForSnapshot(restaurantId);
 
         List<TableResponse> tables = tableService.getTables(rid);
         Map<String, List<MenuItemResponse>> menu = menuService.getMenuGrouped(rid);
@@ -74,6 +77,24 @@ public class EdgeBootstrapController {
         body.put("readyOrders", readyOrders);
         body.put("pendingCalls", pendingCalls);
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * Lab modunda JWT yokken yalnızca {@code restaurantId} sorgu parametresi ile (doğrulanmış) restoran snapshot'ı.
+     */
+    private Long resolveRestaurantIdForSnapshot(Long restaurantIdParam) {
+        User user = securityUtils.getCurrentUserOrNull();
+        if (user != null) {
+            return resolveRestaurantId(user, restaurantIdParam);
+        }
+        if (edgeCloudLabBridge.enabled() && restaurantIdParam != null && restaurantIdParam > 0) {
+            if (!restaurantRepository.existsById(restaurantIdParam)) {
+                throw new BusinessException("Geçersiz restaurantId: " + restaurantIdParam);
+            }
+            return restaurantIdParam;
+        }
+        User required = securityUtils.getCurrentUser();
+        return resolveRestaurantId(required, restaurantIdParam);
     }
 
     private Long resolveRestaurantId(User user, Long restaurantIdParam) {

@@ -48,6 +48,10 @@ public class EdgeNode {
     @Column(name = "last_seen_at")
     private LocalDateTime lastSeenAt;
 
+    /** Son başarılı edge senk / heartbeat zamanı (UTC). */
+    @Column(name = "last_sync_at")
+    private LocalDateTime lastSyncAt;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

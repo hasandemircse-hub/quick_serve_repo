@@ -82,9 +82,9 @@ public class EdgeBootstrapSyncService {
             if (cloudBridgeService.skipCloudJwt()
                     && ex.getStatusCode().value() == 403) {
                 log.warn(
-                        "Edge bootstrap pull failed: HTTP 403 — EDGE_SKIP_CLOUD_JWT=true iken cloud hâlâ JWT istiyor. "
-                                + "VM'deki cloud ortamına QUICKSERVE_DEV_INSECURE_EDGE_BRIDGE=true ekleyip backend'i yeniden başlat "
-                                + "(Spring: app.dev.insecure-edge-cloud-bridge). body={}",
+                        "Edge bootstrap pull failed: HTTP 403 — EDGE_SKIP_CLOUD_JWT=true iken cloud lab kapalı veya eski imaj. "
+                                + "VM: QUICKSERVE_DEV_INSECURE_EDGE_BRIDGE=true + cloud-backend yeniden derle/recreate; "
+                                + "cloud logda 'Edge↔cloud lab bridge: enabled=true' olmalı. body={}",
                         body == null || body.isBlank() ? "(empty)" : body);
             } else {
                 log.warn("Edge bootstrap pull failed: HTTP {} {} body={}",

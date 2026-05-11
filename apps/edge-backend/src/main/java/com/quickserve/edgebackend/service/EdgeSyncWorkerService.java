@@ -17,6 +17,7 @@ public class EdgeSyncWorkerService {
     private final EdgeSyncInboxService inboxService;
     private final CloudBridgeService cloudBridgeService;
     private final EdgeInboxProcessorService inboxProcessorService;
+    private final EdgeOutboxFlushTracker edgeOutboxFlushTracker;
     private final boolean workerEnabled;
     private final int batchSize;
     private final int maxRetry;
@@ -27,6 +28,7 @@ public class EdgeSyncWorkerService {
             EdgeSyncInboxService inboxService,
             CloudBridgeService cloudBridgeService,
             EdgeInboxProcessorService inboxProcessorService,
+            EdgeOutboxFlushTracker edgeOutboxFlushTracker,
             @Value("${app.edge.sync.worker-enabled:true}") boolean workerEnabled,
             @Value("${app.edge.sync.batch-size:50}") int batchSize,
             @Value("${app.edge.sync.max-retry:10}") int maxRetry,
@@ -36,6 +38,7 @@ public class EdgeSyncWorkerService {
         this.inboxService = inboxService;
         this.cloudBridgeService = cloudBridgeService;
         this.inboxProcessorService = inboxProcessorService;
+        this.edgeOutboxFlushTracker = edgeOutboxFlushTracker;
         this.workerEnabled = workerEnabled;
         this.batchSize = batchSize;
         this.maxRetry = maxRetry;
@@ -81,6 +84,7 @@ public class EdgeSyncWorkerService {
         try {
             cloudBridgeService.pushEdgeEvent(event.id(), event.eventType(), event.payloadJson());
             outboxService.markSent(event.id());
+            edgeOutboxFlushTracker.recordSuccessfulFlush();
         } catch (Exception ex) {
             int nextRetryCount = event.retryCount() + 1;
             String reason = abbreviate(ex.getMessage());
