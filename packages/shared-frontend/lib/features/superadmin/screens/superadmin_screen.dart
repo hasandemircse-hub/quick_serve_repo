@@ -2445,7 +2445,7 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       final res = await ApiClient.instance.post(
-        '/superadmin/edge-enrollment-tokens/cleanup',
+        '${ApiConstants.superadminRestaurants}/${widget.restaurantId}/edge-enrollment-tokens/cleanup',
       );
       final deletedCount = (res.data is Map && res.data['deletedCount'] is num)
           ? (res.data['deletedCount'] as num).toInt()
@@ -2571,30 +2571,37 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
     _ => Colors.redAccent,
   };
 
+  bool _tokenNeverExpires(dynamic token) {
+    if (token['neverExpires'] == true) return true;
+    final raw = token['expiresAt'];
+    if (raw is String && raw.contains('9999')) return true;
+    return false;
+  }
+
+  DateTime? _parseExpiresAtUtc(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is! String) return null;
+    return DateTime.tryParse(raw);
+  }
+
   Color _tokenStatusColor(dynamic token) {
     final isUsed = token['isUsed'] == true;
-    final expiresAtRaw = token['expiresAt'] as String?;
-    final expiresAt = expiresAtRaw == null
-        ? null
-        : DateTime.tryParse(expiresAtRaw);
-    final neverExpires = expiresAt != null && expiresAt.year >= 9999;
-    final isExpired = expiresAt != null && expiresAt.isBefore(DateTime.now());
     if (isUsed) return Colors.blueGrey;
-    if (neverExpires) return Colors.teal;
+    if (_tokenNeverExpires(token)) return Colors.teal;
+    final expiresAt = _parseExpiresAtUtc(token['expiresAt']);
+    final isExpired =
+        expiresAt != null && expiresAt.toUtc().isBefore(DateTime.now().toUtc());
     if (isExpired) return Colors.red;
     return Colors.green;
   }
 
   String _tokenStatusLabel(dynamic token) {
     final isUsed = token['isUsed'] == true;
-    final expiresAtRaw = token['expiresAt'] as String?;
-    final expiresAt = expiresAtRaw == null
-        ? null
-        : DateTime.tryParse(expiresAtRaw);
-    final neverExpires = expiresAt != null && expiresAt.year >= 9999;
-    final isExpired = expiresAt != null && expiresAt.isBefore(DateTime.now());
     if (isUsed) return 'USED';
-    if (neverExpires) return 'NEVER_EXPIRES';
+    if (_tokenNeverExpires(token)) return 'NEVER_EXPIRES';
+    final expiresAt = _parseExpiresAtUtc(token['expiresAt']);
+    final isExpired =
+        expiresAt != null && expiresAt.toUtc().isBefore(DateTime.now().toUtc());
     if (isExpired) return 'EXPIRED';
     return 'ACTIVE';
   }

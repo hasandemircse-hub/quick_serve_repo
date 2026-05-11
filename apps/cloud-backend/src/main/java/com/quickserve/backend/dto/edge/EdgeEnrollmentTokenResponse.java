@@ -12,6 +12,8 @@ public class EdgeEnrollmentTokenResponse {
     private Long restaurantId;
     private String token;
     private Boolean isUsed;
+    /** Tarayıcı/Flutter Web tarih parse sınırları için; süresiz tokenlarda true. */
+    private Boolean neverExpires;
     private OffsetDateTime expiresAt;
     private OffsetDateTime usedAt;
     private OffsetDateTime createdAt;

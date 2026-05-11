@@ -82,7 +82,26 @@ public class SuperadminEdgeController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Süresi dolmuş edge enrollment tokenlarını temizle")
+    @Operation(summary = "Belirli restoranın süresi dolmuş edge enrollment tokenlarını temizle")
+    @PostMapping("/restaurants/{restaurantId}/edge-enrollment-tokens/cleanup")
+    public ResponseEntity<EdgeEnrollmentCleanupResponse> cleanupExpiredEnrollmentTokensForRestaurant(
+            @PathVariable Long restaurantId) {
+        int deleted = edgeEnrollmentService.cleanupExpiredTokensForRestaurant(restaurantId);
+        User actor = securityUtils.getCurrentUser();
+        auditService.logUserAction(
+                actor.getId(),
+                actor.getUsername(),
+                "EDGE_ENROLLMENT_TOKEN_CLEANUP_RESTAURANT",
+                "EDGE_ENROLLMENT_TOKEN",
+                null,
+                "restaurantId=" + restaurantId + ", deletedCount=" + deleted,
+                null,
+                restaurantId
+        );
+        return ResponseEntity.ok(EdgeEnrollmentCleanupResponse.builder().deletedCount(deleted).build());
+    }
+
+    @Operation(summary = "Süresi dolmuş edge enrollment tokenlarını (tüm restoranlar) temizle")
     @PostMapping("/edge-enrollment-tokens/cleanup")
     public ResponseEntity<EdgeEnrollmentCleanupResponse> cleanupExpiredEnrollmentTokens() {
         int deleted = edgeEnrollmentService.cleanupExpiredTokens();

@@ -127,6 +127,16 @@ public class EdgeEnrollmentService {
         return expiredTokens.size();
     }
 
+    /**
+     * Yalnızca bu restorana ait ve {@code expiresAt < nowUtc()} kayıtları siler (süresiz 9999 kayıtları zaten seçilmez).
+     * Superadmin ekranındaki liste ile uyumlu, tüm DB taramasından daha öngörülebilir.
+     */
+    @Transactional
+    public int cleanupExpiredTokensForRestaurant(Long restaurantId) {
+        restaurantService.findById(restaurantId);
+        return tokenRepository.deleteByRestaurantIdAndExpiresAtBefore(restaurantId, nowUtc());
+    }
+
     private String generateToken(int length) {
         StringBuilder sb = new StringBuilder(length);
         for (int i = 0; i < length; i++) {
@@ -170,6 +180,7 @@ public class EdgeEnrollmentService {
                 .restaurantId(token.getRestaurant().getId())
                 .token(token.getToken())
                 .isUsed(token.getIsUsed())
+                .neverExpires(isNonExpiring(token.getExpiresAt()))
                 .expiresAt(expiresAtUtc)
                 .usedAt(usedAtUtc)
                 .createdAt(createdAtUtc)
