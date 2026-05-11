@@ -10,7 +10,8 @@ services:
       EDGE_RESTAURANT_ID: ${EDGE_RESTAURANT_ID}
       EDGE_CLOUD_BASE_URL: ${EDGE_CLOUD_BASE_URL}
       EDGE_BRIDGE_JWT_TOKEN: ${EDGE_BRIDGE_JWT_TOKEN:-}
-      EDGE_SQLITE_PATH: ${EDGE_SQLITE_PATH:-/data/edge.db}
+      # Container içi yol sabit; host .env.edge’deki ./data/edge.db (IDE) ile karışmasın.
+      EDGE_SQLITE_PATH: /data/edge.db
       EDGE_ENROLLMENT_TOKEN: ${EDGE_ENROLLMENT_TOKEN}
       EDGE_SYNC_INTERVAL_MS: ${EDGE_SYNC_INTERVAL_MS:-5000}
       EDGE_POS_DEFAULT_PROVIDER: ${EDGE_POS_DEFAULT_PROVIDER:-mock-pos}

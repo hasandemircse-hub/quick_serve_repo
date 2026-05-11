@@ -1,7 +1,8 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
+import '../../../core/network/api_client.dart';
 import '../../../core/providers/auth_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -31,7 +32,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() { _loading = true; _error = null; });
 
     try {
-      final response = await ApiClient.instance.postEdgeFirstWithCloudFallback(
+      // Personel JWT her zaman cloud’ta üretilir; edge-backend’de /auth/login yok.
+      final response = await ApiClient.instance.post(
         ApiConstants.login,
         data: {
           'username': _usernameCtrl.text.trim(),
@@ -47,8 +49,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       // Navigation will be handled by the router redirect
       if (!mounted) return;
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      final unreachable = e.type == DioExceptionType.connectionError ||
+          e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout;
+      final serverDown = status != null && status >= 500 && status < 600;
 
-    } catch (e) {
+      if ((unreachable || serverDown) && status != 401) {
+        final offlineOk = await ref.read(authProvider.notifier).tryOfflineLoginWithCachedSession(
+              _usernameCtrl.text.trim(),
+            );
+        if (offlineOk && mounted) {
+          return;
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        if (status == 401) {
+          _error = 'Kullanıcı adı veya şifre hatalı';
+        } else if (unreachable || serverDown) {
+          _error =
+              'Sunucuya ulaşılamadı. Çevrimdışı giriş için aynı kullanıcı adıyla ve süresi dolmamış son oturumla deneyin (JWT süresi kadar, örn. 24 saat).';
+        } else {
+          _error = 'Kullanıcı adı veya şifre hatalı';
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
       setState(() {
         _error = 'Kullanıcı adı veya şifre hatalı';
       });

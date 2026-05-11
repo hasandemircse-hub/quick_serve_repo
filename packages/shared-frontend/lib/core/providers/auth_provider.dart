@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../auth/jwt_expiration.dart';
 import '../constants/api_constants.dart';
 import '../network/api_base_url_resolver.dart';
 import '../network/websocket_service.dart';
@@ -53,19 +54,45 @@ class AuthNotifier extends ChangeNotifier {
 
   Future<void> _checkAuthStatus() async {
     final token = await LocalStorage.getToken();
-    if (token != null) {
-      final userInfo = await LocalStorage.getUserInfo();
-      _state = AuthState(
-        isAuthenticated: true,
-        token: token,
-        role: userInfo['role'] as String?,
-        username: userInfo['username'] as String?,
-        restaurantId: userInfo['restaurantId'] as int?,
-      );
-      // Uygulama yeniden açıldığında yalnızca restoran-bağlı roller için WS aç.
-      _syncWebSocketConnection();
-      notifyListeners();
+    if (token == null) return;
+    if (!isJwtStillValid(token)) {
+      await LocalStorage.clearToken();
+      await LocalStorage.clearUserInfo();
+      return;
     }
+    final userInfo = await LocalStorage.getUserInfo();
+    _state = AuthState(
+      isAuthenticated: true,
+      token: token,
+      role: userInfo['role'] as String?,
+      username: userInfo['username'] as String?,
+      restaurantId: userInfo['restaurantId'] as int?,
+    );
+    _syncWebSocketConnection();
+    notifyListeners();
+  }
+
+  /// Cloud’a ulaşılamazken: daha önce kaydedilmiş JWT hâlâ geçerliyse ve kullanıcı adı
+  /// eşleşiyorsa oturumu yerelden yükle (JWT süresi cloud ile uyumlu, örn. 24 saat).
+  Future<bool> tryOfflineLoginWithCachedSession(String usernameAttempt) async {
+    final token = await LocalStorage.getToken();
+    if (token == null || token.isEmpty) return false;
+    if (!isJwtStillValid(token)) return false;
+    final info = await LocalStorage.getUserInfo();
+    final cachedUser = (info['username'] as String?)?.trim() ?? '';
+    if (cachedUser.isEmpty) return false;
+    if (usernameAttempt.trim() != cachedUser) return false;
+
+    await login(token, {
+      'username': info['username'],
+      'fullName': info['fullName'],
+      'role': '${info['role'] ?? ''}',
+      'restaurantName': info['restaurantName'],
+      'restaurantId': info['restaurantId'],
+      'isMenuImagesEnabled': info['isMenuImagesEnabled'] == true,
+      'isPosDeviceEnabled': info['isPosDeviceEnabled'] == true,
+    });
+    return true;
   }
 
   Future<void> login(String token, Map<String, dynamic> userData) async {

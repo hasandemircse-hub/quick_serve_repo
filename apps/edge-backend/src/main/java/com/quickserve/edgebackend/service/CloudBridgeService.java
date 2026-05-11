@@ -37,6 +37,15 @@ public class CloudBridgeService {
                 .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {});
     }
 
+    public Map<String, Object> fetchWaiterMenuFromCloud() {
+        return restClient.get()
+                .uri("/waiter/menu")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + bridgeJwtToken)
+                .accept(MediaType.APPLICATION_JSON)
+                .retrieve()
+                .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+    }
+
     public List<Map<String, Object>> fetchKitchenOrders() {
         return restClient.get()
                 .uri("/kitchen/orders")
@@ -44,6 +53,21 @@ public class CloudBridgeService {
                 .accept(MediaType.APPLICATION_JSON)
                 .retrieve()
                 .body(new ParameterizedTypeReference<List<Map<String, Object>>>() {});
+    }
+
+    /**
+     * Tam restoran görüntüsü (masa, menü, personel, siparişler, çağrılar). SUPERADMIN köprüsü için {@code restaurantId} gönderilir.
+     */
+    public Map<String, Object> fetchBootstrapSnapshot(Long restaurantId) {
+        String uri = (restaurantId != null && restaurantId > 0)
+                ? "/edge/bootstrap/snapshot?restaurantId=" + restaurantId
+                : "/edge/bootstrap/snapshot";
+        return restClient.get()
+                .uri(uri)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + bridgeJwtToken)
+                .accept(MediaType.APPLICATION_JSON)
+                .retrieve()
+                .body(new ParameterizedTypeReference<Map<String, Object>>() {});
     }
 
     public boolean pushEdgeEvent(String eventId, String eventType, String payloadJson) {

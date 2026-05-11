@@ -21,7 +21,20 @@
             "mainClass": "com.quickserve.edgebackend.EdgeBackendApplication",
             "projectName": "edge-backend",
             "args": "",
-            "envFile": "${workspaceFolder}/.env"
+            "envFile": "${workspaceFolder}/.env.edge"
+        },
+        {
+            "name": "Flutter edge-frontend (Chrome → cloud VM)",
+            "request": "launch",
+            "type": "dart",
+            "cwd": "${workspaceFolder}/apps/edge-frontend",
+            "program": "lib/main.dart",
+            "deviceId": "chrome",
+            "args": [
+                "--dart-define=API_URL=http://127.0.0.1:8081/api",
+                "--dart-define=EDGE_API_URL=http://127.0.0.1:8081/api",
+                "--dart-define=CLOUD_API_URL=http://192.168.139.157/api"
+            ]
         }
     ]
 }

@@ -52,6 +52,9 @@ public class SecurityConfig {
                 ).permitAll()
                 // Edge enrollment (manuel token claim)
                 .requestMatchers("/edge/enrollment/**").permitAll()
+                // Edge bootstrap snapshot (bridge JWT = personel veya admin)
+                .requestMatchers("/edge/bootstrap/**").hasAnyRole(
+                        "SUPERADMIN", "RESTAURANT_ADMIN", "HEAD_WAITER", "WAITER", "CHEF", "VALET")
                 // WebSocket handshake (SockJS + raw). JWT query param ile doğrulanır.
                 .requestMatchers("/ws", "/ws/**").permitAll()
                 // Sadece SUPERADMIN

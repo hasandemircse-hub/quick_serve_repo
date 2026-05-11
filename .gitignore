@@ -1,6 +1,8 @@
 # Environment
 .env
 *.env.local
+# Edge IDE SQLite (repo kökü ./data/edge.db)
+/data/
 
 # Backend (Maven)
 apps/cloud-backend/target/

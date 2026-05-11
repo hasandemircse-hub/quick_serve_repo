@@ -1172,6 +1172,7 @@ class _RestaurantCard extends StatelessWidget {
     final posDeviceEnabled = r['isPosDeviceEnabled'] == true;
     final staffCount = (r['staffCount'] as num?)?.toInt() ?? 0;
     final name = r['name'] as String? ?? '';
+    final restaurantId = (r['id'] as num?)?.toInt();
     final statusColor = _subscriptionColor(status);
 
     // Subtitle: telefon ve/veya email varsa göster, yoksa sadece personel sayısı
@@ -1235,7 +1236,7 @@ class _RestaurantCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      name,
+                      restaurantId != null ? '$name  ·  #$restaurantId' : name,
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
