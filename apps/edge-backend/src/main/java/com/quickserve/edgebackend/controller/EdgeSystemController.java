@@ -94,11 +94,18 @@ public class EdgeSystemController {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("cloudBaseUrl", cloudBaseUrl);
         out.put("restaurantId", restaurantId);
+        out.put("skipCloudJwt", cloudBridgeService.skipCloudJwt());
         out.put("bridgeConfigured", cloudBridgeService.isBridgeConfigured());
-        out.put("bridgeJwtShapeOk", cloudBridgeService.bridgeJwtLooksPlausible());
-        if (!cloudBridgeService.isBridgeConfigured() || !cloudBridgeService.bridgeJwtLooksPlausible()) {
-            out.put("todo", "Superadmin (cloud web) → Restoran Edge ayarları → 1 haftalık token → Köprü anahtarını al → .env.edge EDGE_BRIDGE_JWT_TOKEN");
-            return ResponseEntity.ok(out);
+        out.put("bridgeJwtShapeOk", cloudBridgeService.skipCloudJwt()
+                || cloudBridgeService.bridgeJwtLooksPlausible());
+        out.put("bridgeJwtDiagnostics", cloudBridgeService.bridgeJwtDiagnostics());
+        if (!cloudBridgeService.skipCloudJwt()) {
+            if (!cloudBridgeService.isBridgeConfigured() || !cloudBridgeService.bridgeJwtLooksPlausible()) {
+                out.put("todo", "Superadmin (cloud web) → Restoran Edge ayarları → 1 haftalık token → Köprü anahtarını al → .env.edge EDGE_BRIDGE_JWT_TOKEN");
+                return ResponseEntity.ok(out);
+            }
+        } else {
+            out.put("labMode", "EDGE_SKIP_CLOUD_JWT=true — Cloud VM .env içinde QUICKSERVE_DEV_INSECURE_EDGE_BRIDGE=true olmalı; yoksa 403.");
         }
         out.put("snapshot", probe(() -> cloudBridgeService.fetchBootstrapSnapshot(
                 restaurantId > 0 ? restaurantId : null)));

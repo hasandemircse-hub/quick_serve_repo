@@ -45,16 +45,19 @@ public class EdgeBootstrapSyncService {
      * @return true if snapshot was refreshed
      */
     public boolean pullSnapshotFromCloud() {
-        if (!cloudBridgeService.isBridgeConfigured()) {
-            log.debug("Edge bootstrap skipped: bridge JWT not configured");
-            return false;
-        }
-        if (!cloudBridgeService.bridgeJwtLooksPlausible()) {
-            log.warn(
-                    "Edge bootstrap skipped: EDGE_BRIDGE_JWT_TOKEN is not a JWT (expected eyJ... with dots). "
-                            + "The superadmin list value is the enrollment code only — call POST .../edge/enrollment/claim "
-                            + "with it, then set EDGE_BRIDGE_JWT_TOKEN to the bridgeJwtToken field from the JSON response.");
-            return false;
+        if (!cloudBridgeService.skipCloudJwt()) {
+            if (!cloudBridgeService.isBridgeConfigured()) {
+                log.debug("Edge bootstrap skipped: bridge JWT not configured");
+                return false;
+            }
+            if (!cloudBridgeService.bridgeJwtLooksPlausible()) {
+                log.warn(
+                        "Edge bootstrap skipped: EDGE_BRIDGE_JWT_TOKEN is not a JWT (expected eyJ... with dots). "
+                                + "The superadmin list value is the enrollment code only — call POST .../edge/enrollment/claim "
+                                + "with it, then set EDGE_BRIDGE_JWT_TOKEN to the bridgeJwtToken field from the JSON response. "
+                                + "Or use lab pair EDGE_SKIP_CLOUD_JWT=true + cloud QUICKSERVE_DEV_INSECURE_EDGE_BRIDGE=true.");
+                return false;
+            }
         }
         if (configuredRestaurantId <= 0) {
             log.warn("Edge bootstrap skipped: app.edge.restaurant-id / EDGE_RESTAURANT_ID is not set");

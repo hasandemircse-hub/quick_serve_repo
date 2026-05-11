@@ -3,6 +3,8 @@ package com.quickserve.backend.config;
 import com.quickserve.backend.security.JwtAuthFilter;
 import com.quickserve.backend.security.UserDetailsServiceImpl;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -24,54 +26,62 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
+@Slf4j
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
     private final UserDetailsServiceImpl userDetailsService;
 
+    /**
+     * Kapalı lab (IDE edge → VM cloud): JWT olmadan edge okuma/sync. ASLA internete açık ortamda true yapma.
+     */
+    @Value("${app.dev.insecure-edge-cloud-bridge:false}")
+    private boolean insecureEdgeCloudBridge;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        if (insecureEdgeCloudBridge) {
+            log.warn(
+                    "SECURITY: app.dev.insecure-edge-cloud-bridge=true — /edge/bootstrap, /edge/sync, /waiter, /kitchen "
+                            + "JWT olmadan herkese açık. Sadece güvenilir LAN / kapalı VM kullanın.");
+        }
         http
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> {}) // CorsConfig bean'ini kullan
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                // CORS preflight
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                // Herkese açık: QR ile müşteri girişi
-                .requestMatchers("/customer/**").permitAll()
-                // Auth endpointleri
-                .requestMatchers("/auth/**").permitAll()
-                // Swagger / Actuator
-                // Backend'de `server.servlet.context-path=/api` olduğu için gerçek yol `/api/actuator/health` olur.
-                .requestMatchers(
-                    "/swagger-ui/**",
-                    "/api-docs/**",
-                    "/actuator/health",
-                    "/api/actuator/health"
-                ).permitAll()
-                // Edge enrollment (manuel token claim)
-                .requestMatchers("/edge/enrollment/**").permitAll()
-                // Edge bootstrap snapshot (bridge JWT = personel veya admin)
-                .requestMatchers("/edge/bootstrap/**").hasAnyRole(
-                        "SUPERADMIN", "RESTAURANT_ADMIN", "HEAD_WAITER", "WAITER", "CHEF", "VALET")
-                .requestMatchers("/edge/sync/**").hasAnyRole(
-                        "SUPERADMIN", "RESTAURANT_ADMIN", "HEAD_WAITER", "WAITER", "CHEF", "VALET")
-                // WebSocket handshake (SockJS + raw). JWT query param ile doğrulanır.
-                .requestMatchers("/ws", "/ws/**").permitAll()
-                // Sadece SUPERADMIN
-                .requestMatchers("/superadmin/**").hasRole("SUPERADMIN")
-                // Restoran admin + superadmin
-                .requestMatchers("/admin/**").hasAnyRole("SUPERADMIN", "RESTAURANT_ADMIN")
-                // Garson ekranı
-                .requestMatchers("/waiter/**").hasAnyRole("SUPERADMIN", "RESTAURANT_ADMIN", "HEAD_WAITER", "WAITER")
-                // Mutfak ekranı
-                .requestMatchers("/kitchen/**").hasAnyRole("SUPERADMIN", "RESTAURANT_ADMIN", "CHEF", "HEAD_WAITER")
-                // Vale
-                .requestMatchers("/valet/**").hasAnyRole("SUPERADMIN", "RESTAURANT_ADMIN", "HEAD_WAITER", "VALET")
-                // Geri kalan her şey kimlik doğrulaması gerektirir
-                .anyRequest().authenticated()
-            )
+            .authorizeHttpRequests(auth -> {
+                auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
+                auth.requestMatchers("/customer/**").permitAll();
+                auth.requestMatchers("/auth/**").permitAll();
+                auth.requestMatchers(
+                        "/swagger-ui/**",
+                        "/api-docs/**",
+                        "/actuator/health",
+                        "/api/actuator/health"
+                ).permitAll();
+                auth.requestMatchers("/edge/enrollment/**").permitAll();
+                if (insecureEdgeCloudBridge) {
+                    auth.requestMatchers("/edge/bootstrap/**").permitAll();
+                    auth.requestMatchers("/edge/sync/**").permitAll();
+                    auth.requestMatchers("/waiter/**").permitAll();
+                    auth.requestMatchers("/kitchen/**").permitAll();
+                } else {
+                    auth.requestMatchers("/edge/bootstrap/**").hasAnyRole(
+                            "SUPERADMIN", "RESTAURANT_ADMIN", "HEAD_WAITER", "WAITER", "CHEF", "VALET");
+                    auth.requestMatchers("/edge/sync/**").hasAnyRole(
+                            "SUPERADMIN", "RESTAURANT_ADMIN", "HEAD_WAITER", "WAITER", "CHEF", "VALET");
+                    auth.requestMatchers("/waiter/**").hasAnyRole(
+                            "SUPERADMIN", "RESTAURANT_ADMIN", "HEAD_WAITER", "WAITER");
+                    auth.requestMatchers("/kitchen/**").hasAnyRole(
+                            "SUPERADMIN", "RESTAURANT_ADMIN", "CHEF", "HEAD_WAITER");
+                }
+                auth.requestMatchers("/ws", "/ws/**").permitAll();
+                auth.requestMatchers("/superadmin/**").hasRole("SUPERADMIN");
+                auth.requestMatchers("/admin/**").hasAnyRole("SUPERADMIN", "RESTAURANT_ADMIN");
+                auth.requestMatchers("/valet/**").hasAnyRole(
+                        "SUPERADMIN", "RESTAURANT_ADMIN", "HEAD_WAITER", "VALET");
+                auth.anyRequest().authenticated();
+            })
             .authenticationProvider(authenticationProvider())
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 

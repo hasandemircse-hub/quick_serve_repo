@@ -64,7 +64,7 @@ public class EdgeReadController {
                 return ResponseEntity.ok(out);
             }
         }
-        if (cloudBridgeService.isBridgeConfigured()) {
+        if (cloudBridgeService.shouldTryCloudLive()) {
             try {
                 return ResponseEntity.ok(cloudBridgeService.fetchWaiterTables());
             } catch (Exception ignored) {
@@ -91,7 +91,7 @@ public class EdgeReadController {
                 return ResponseEntity.ok(out);
             }
         }
-        if (cloudBridgeService.isBridgeConfigured()) {
+        if (cloudBridgeService.shouldTryCloudLive()) {
             try {
                 Map<String, List<Map<String, Object>>> out = objectMapper.convertValue(
                         cloudBridgeService.fetchWaiterMenuFromCloud(),
@@ -249,7 +249,7 @@ public class EdgeReadController {
                 return ResponseEntity.ok(out);
             }
         }
-        if (cloudBridgeService.isBridgeConfigured()) {
+        if (cloudBridgeService.shouldTryCloudLive()) {
             try {
                 return ResponseEntity.ok(cloudBridgeService.fetchKitchenOrders());
             } catch (Exception ignored) {

@@ -50,7 +50,7 @@ public class EdgeSyncWorkerService {
 
         processInboxRetries();
 
-        if (cloudBridgeService.isBridgeConfigured()) {
+        if (cloudBridgeService.shouldTryCloudLive()) {
             List<EdgeSyncOutboxService.OutboxEvent> events = outboxService.pollPendingEvents(batchSize);
             for (EdgeSyncOutboxService.OutboxEvent event : events) {
                 handleEvent(event);
