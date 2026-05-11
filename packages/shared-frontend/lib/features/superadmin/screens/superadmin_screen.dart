@@ -2478,6 +2478,36 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
     ).showSnackBar(const SnackBar(content: Text('Token panoya kopyalandı')));
   }
 
+  Future<void> _showTokenDialog(String tokenValue) async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enrollment Token'),
+        content: SizedBox(
+          width: 520,
+          child: SelectableText(
+            tokenValue,
+            style: const TextStyle(fontFamily: 'monospace'),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Kapat'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              _copyTokenToClipboard(tokenValue);
+              Navigator.pop(ctx);
+            },
+            icon: const Icon(Icons.copy, size: 16),
+            label: const Text('Kopyala'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _updateEdgeNodeStatus(dynamic node, String status) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
@@ -2728,6 +2758,7 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
                   final isUsed = tokenItem['isUsed'] == true;
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
+                    onTap: () => _showTokenDialog(tokenValue),
                     leading: const Icon(Icons.key_outlined),
                     title: Text(
                       tokenValue,
