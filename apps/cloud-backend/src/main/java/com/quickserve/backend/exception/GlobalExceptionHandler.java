@@ -10,6 +10,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -51,6 +52,21 @@ public class GlobalExceptionHandler {
                                                                HttpServletRequest request) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(buildError(HttpStatus.UNAUTHORIZED, "Invalid username or password", request.getRequestURI()));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatus(ResponseStatusException ex,
+                                                                HttpServletRequest request) {
+        HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
+        if (status == null) {
+            status = HttpStatus.BAD_REQUEST;
+        }
+        String message = ex.getReason();
+        if (message == null || message.isBlank()) {
+            message = status.getReasonPhrase();
+        }
+        return ResponseEntity.status(status)
+                .body(buildError(status, message, request.getRequestURI()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

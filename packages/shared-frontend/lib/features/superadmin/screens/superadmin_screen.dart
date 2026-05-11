@@ -2296,11 +2296,30 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
       if (!mounted) return;
       final body = res.data;
       if (body is! Map) {
-        throw StateError('Beklenmeyen yanıt');
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Beklenmeyen yanıt (JSON değil). Cloud adresi doğru mu? '
+              'HTTP ${res.statusCode}',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
       }
-      final jwt = body['bridgeJwtToken'] as String?;
+      final map = Map<String, dynamic>.from(body);
+      final jwt = map['bridgeJwtToken'] as String?;
       if (jwt == null || jwt.isEmpty) {
-        throw StateError('Yanıtta bridgeJwtToken yok');
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Yanıtta köprü anahtarı yok (bridgeJwtToken). '
+              'Cloud backend sürümün güncel olduğundan emin ol veya tekrar dene.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
       }
       final nodesRes = await ApiClient.instance.get(
         '${ApiConstants.superadminRestaurants}/${widget.restaurantId}/edge-nodes',

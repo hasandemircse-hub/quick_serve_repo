@@ -164,16 +164,35 @@ class _ErrorInterceptor extends Interceptor {
 /// Backend ErrorResponse.message'ını çekip kullanıcıya gösterilebilir hale getirir.
 /// Backend `{ "message": "..." }` döndürür; bağlantı hataları için fallback metin verilir.
 String apiErrorMessage(Object error) {
+  if (error is StateError) {
+    return error.message;
+  }
   if (error is DioException) {
+    final status = error.response?.statusCode;
     final data = error.response?.data;
     if (data is Map && data['message'] is String) {
       final msg = (data['message'] as String).trim();
-      if (msg.isNotEmpty) return msg;
+      if (msg.isNotEmpty) {
+        if (msg == 'An internal error occurred' && status != null) {
+          return 'Sunucu hatası ($status). İşlem bir kez başarılı olduysa enrollment kodu artık '
+              'geçersizdir; yeni kod üretip tekrar dene. Devam ederse cloud loglarına bak.';
+        }
+        return msg;
+      }
+    }
+    if (data is String && data.trim().isNotEmpty) {
+      final preview = data.trim().length > 120
+          ? '${data.trim().substring(0, 120)}…'
+          : data.trim();
+      return 'Beklenmeyen yanıt (HTTP ${status ?? '?'}): $preview';
     }
     if (error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.receiveTimeout ||
         error.type == DioExceptionType.connectionError) {
       return 'Sunucuya ulaşılamadı';
+    }
+    if (status != null) {
+      return 'İstek başarısız (HTTP $status)';
     }
   }
   return error.toString();
