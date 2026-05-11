@@ -17,6 +17,7 @@ packages/shared-frontend/build/
 packages/shared-frontend/.packages
 apps/cloud-frontend/.dart_tool/
 apps/cloud-frontend/build/
+.pub-cache-docker/
 apps/edge-frontend/.dart_tool/
 apps/edge-frontend/build/
 
