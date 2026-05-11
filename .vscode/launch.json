@@ -16,7 +16,7 @@
         },
         {
             "type": "java",
-            "name": "Spring Boot-EdgeBackendApplication<edge-backend>",
+            "name": "Spring Boot-Edge (IDE → .env.edge, cloud VM)",
             "request": "launch",
             "cwd": "${workspaceFolder}",
             "mainClass": "com.quickserve.edgebackend.EdgeBackendApplication",

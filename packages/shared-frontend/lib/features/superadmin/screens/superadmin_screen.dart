@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -2257,6 +2259,33 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
     super.dispose();
   }
 
+  String? _readBridgeJwtFromClaimBody(Object? raw) {
+    Object? v = raw;
+    if (v is String) {
+      final t = v.trim();
+      if (t.startsWith('{') || t.startsWith('[')) {
+        try {
+          v = jsonDecode(t);
+        } catch (_) {
+          return null;
+        }
+      } else {
+        return null;
+      }
+    }
+    if (v is! Map) return null;
+    final map = Map<String, dynamic>.from(v);
+    for (final key in ['bridgeJwtToken', 'bridge_jwt_token']) {
+      final o = map[key];
+      if (o is String && o.isNotEmpty) return o;
+    }
+    final inner = map['data'];
+    if (inner != null && inner != map) {
+      return _readBridgeJwtFromClaimBody(inner);
+    }
+    return null;
+  }
+
   Future<void> _claimEnrollmentAndFetchBridgeJwt() async {
     final messenger = ScaffoldMessenger.of(context);
     final token = _claimTokenCtrl.text.trim();
@@ -2294,27 +2323,16 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
         },
       );
       if (!mounted) return;
-      final body = res.data;
-      if (body is! Map) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              'Beklenmeyen yanıt (JSON değil). Cloud adresi doğru mu? '
-              'HTTP ${res.statusCode}',
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-      final map = Map<String, dynamic>.from(body);
-      final jwt = map['bridgeJwtToken'] as String?;
+      final jwt = _readBridgeJwtFromClaimBody(res.data);
       if (jwt == null || jwt.isEmpty) {
+        final hint = res.data is Map
+            ? (res.data as Map).keys.take(12).join(', ')
+            : res.data.runtimeType.toString();
         messenger.showSnackBar(
           SnackBar(
             content: Text(
-              'Yanıtta köprü anahtarı yok (bridgeJwtToken). '
-              'Cloud backend sürümün güncel olduğundan emin ol veya tekrar dene.',
+              'Yanıtta köprü anahtarı bulunamadı. Gelen alanlar (ilk 12): $hint. '
+              'Cloud backend’i yeniden derleyip çalıştırdığından emin ol.',
             ),
             backgroundColor: Colors.red,
           ),

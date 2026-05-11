@@ -120,11 +120,10 @@ public class EdgeEnrollmentService {
         User bridgePrincipal = resolveBridgePrincipal(enrollmentToken.getRestaurant().getId());
         String bridgeJwtToken = jwtUtil.generateToken(bridgePrincipal);
 
-        return EdgeEnrollmentClaimResponse.builder()
-                .restaurantId(enrollmentToken.getRestaurant().getId())
-                .edgeNode(edgeNode)
-                .bridgeJwtToken(bridgeJwtToken)
-                .build();
+        return new EdgeEnrollmentClaimResponse(
+                enrollmentToken.getRestaurant().getId(),
+                edgeNode,
+                bridgeJwtToken);
     }
 
     @Transactional
