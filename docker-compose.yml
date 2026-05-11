@@ -43,6 +43,8 @@ services:
       NETGSM_HEADER: ${NETGSM_HEADER:-QUICKSERVE}
       SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME:-superadmin}
       SUPERADMIN_PHONE: ${SUPERADMIN_PHONE:-}
+      # Kapalı lab: edge JWT göndermeden snapshot — .env ile false bırakın; sadece güvenilir LAN'da true.
+      QUICKSERVE_DEV_INSECURE_EDGE_BRIDGE: ${QUICKSERVE_DEV_INSECURE_EDGE_BRIDGE:-false}
     volumes:
       - backend_logs:/app/logs
     restart: unless-stopped

@@ -79,9 +79,18 @@ public class EdgeBootstrapSyncService {
             return true;
         } catch (RestClientResponseException ex) {
             String body = ex.getResponseBodyAsString(StandardCharsets.UTF_8);
-            log.warn("Edge bootstrap pull failed: HTTP {} {} body={}",
-                    ex.getStatusCode().value(), ex.getStatusText(),
-                    body == null || body.isBlank() ? "(empty)" : body);
+            if (cloudBridgeService.skipCloudJwt()
+                    && ex.getStatusCode().value() == 403) {
+                log.warn(
+                        "Edge bootstrap pull failed: HTTP 403 — EDGE_SKIP_CLOUD_JWT=true iken cloud hâlâ JWT istiyor. "
+                                + "VM'deki cloud ortamına QUICKSERVE_DEV_INSECURE_EDGE_BRIDGE=true ekleyip backend'i yeniden başlat "
+                                + "(Spring: app.dev.insecure-edge-cloud-bridge). body={}",
+                        body == null || body.isBlank() ? "(empty)" : body);
+            } else {
+                log.warn("Edge bootstrap pull failed: HTTP {} {} body={}",
+                        ex.getStatusCode().value(), ex.getStatusText(),
+                        body == null || body.isBlank() ? "(empty)" : body);
+            }
             return false;
         } catch (Exception ex) {
             log.warn("Edge bootstrap pull failed: {}", ex.getMessage());

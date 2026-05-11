@@ -21,6 +21,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.core.env.Environment;
+
+import java.util.Arrays;
 
 @Configuration
 @EnableWebSecurity
@@ -31,6 +34,7 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
     private final UserDetailsServiceImpl userDetailsService;
+    private final Environment environment;
 
     /**
      * Kapalı lab (IDE edge → VM cloud): JWT olmadan edge okuma/sync. ASLA internete açık ortamda true yapma.
@@ -38,9 +42,23 @@ public class SecurityConfig {
     @Value("${app.dev.insecure-edge-cloud-bridge:false}")
     private boolean insecureEdgeCloudBridge;
 
+    /** {@code prod} profilinde lab bayrağı ortam değişkeni ile bile açılamaz. */
+    private boolean insecureEdgeCloudBridgeEffective() {
+        if (Arrays.stream(environment.getActiveProfiles()).anyMatch(p -> p.equalsIgnoreCase("prod"))) {
+            if (insecureEdgeCloudBridge) {
+                log.warn(
+                        "app.dev.insecure-edge-cloud-bridge=true yok sayılıyor (aktif profil: prod). "
+                                + "Edge lab için prod profilini kullanmayın.");
+            }
+            return false;
+        }
+        return insecureEdgeCloudBridge;
+    }
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        if (insecureEdgeCloudBridge) {
+        boolean insecureBridge = insecureEdgeCloudBridgeEffective();
+        if (insecureBridge) {
             log.warn(
                     "SECURITY: app.dev.insecure-edge-cloud-bridge=true — /edge/bootstrap, /edge/sync, /waiter, /kitchen "
                             + "JWT olmadan herkese açık. Sadece güvenilir LAN / kapalı VM kullanın.");
@@ -60,7 +78,7 @@ public class SecurityConfig {
                         "/api/actuator/health"
                 ).permitAll();
                 auth.requestMatchers("/edge/enrollment/**").permitAll();
-                if (insecureEdgeCloudBridge) {
+                if (insecureBridge) {
                     auth.requestMatchers("/edge/bootstrap/**").permitAll();
                     auth.requestMatchers("/edge/sync/**").permitAll();
                     auth.requestMatchers("/waiter/**").permitAll();

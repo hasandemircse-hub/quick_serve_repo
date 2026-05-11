@@ -43,6 +43,8 @@ services:
       SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD}
       SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL}
       SUPERADMIN_PHONE: ${SUPERADMIN_PHONE:-}
+      # Kapalı lab (LAN): edge JWT göndermeden /edge/bootstrap vb. — .env.cloud ile false; lab için true + backend restart.
+      QUICKSERVE_DEV_INSECURE_EDGE_BRIDGE: ${QUICKSERVE_DEV_INSECURE_EDGE_BRIDGE:-false}
     ports:
       - "8080:8080"
     volumes:

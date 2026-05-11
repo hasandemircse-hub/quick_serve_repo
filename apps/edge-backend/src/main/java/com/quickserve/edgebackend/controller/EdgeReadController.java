@@ -52,17 +52,36 @@ public class EdgeReadController {
         });
     }
 
+    /** Boş snapshot (ör. bootstrap başarısız) ile cloud canlı verisini gizlememek için. */
+    private static boolean snapshotHasNonEmptyTables(JsonNode root) {
+        JsonNode n = root.path("tables");
+        return n.isArray() && n.size() > 0;
+    }
+
+    private static boolean snapshotHasAnyMenuItems(JsonNode root) {
+        JsonNode menu = root.path("menu");
+        if (!menu.isObject()) {
+            return false;
+        }
+        var it = menu.fields();
+        while (it.hasNext()) {
+            JsonNode arr = it.next().getValue();
+            if (arr.isArray() && arr.size() > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @GetMapping("/waiter/tables")
     public ResponseEntity<List<Map<String, Object>>> getWaiterTables() {
         Optional<JsonNode> root = loadSnapshotRoot();
-        if (root.isPresent()) {
+        if (root.isPresent() && snapshotHasNonEmptyTables(root.get())) {
             JsonNode tables = root.get().path("tables");
-            if (tables.isArray()) {
-                List<Map<String, Object>> out = objectMapper.convertValue(
-                        tables,
-                        new TypeReference<List<Map<String, Object>>>() {});
-                return ResponseEntity.ok(out);
-            }
+            List<Map<String, Object>> out = objectMapper.convertValue(
+                    tables,
+                    new TypeReference<List<Map<String, Object>>>() {});
+            return ResponseEntity.ok(out);
         }
         if (cloudBridgeService.shouldTryCloudLive()) {
             try {
@@ -82,14 +101,12 @@ public class EdgeReadController {
     @GetMapping("/waiter/menu")
     public ResponseEntity<Map<String, List<Map<String, Object>>>> getWaiterMenu() {
         Optional<JsonNode> root = loadSnapshotRoot();
-        if (root.isPresent()) {
+        if (root.isPresent() && snapshotHasAnyMenuItems(root.get())) {
             JsonNode menu = root.get().path("menu");
-            if (menu.isObject()) {
-                Map<String, List<Map<String, Object>>> out = objectMapper.convertValue(
-                        menu,
-                        new TypeReference<Map<String, List<Map<String, Object>>>>() {});
-                return ResponseEntity.ok(out);
-            }
+            Map<String, List<Map<String, Object>>> out = objectMapper.convertValue(
+                    menu,
+                    new TypeReference<Map<String, List<Map<String, Object>>>>() {});
+            return ResponseEntity.ok(out);
         }
         if (cloudBridgeService.shouldTryCloudLive()) {
             try {
@@ -242,7 +259,7 @@ public class EdgeReadController {
         Optional<JsonNode> root = loadSnapshotRoot();
         if (root.isPresent()) {
             JsonNode orders = root.get().path("kitchenOrders");
-            if (orders.isArray()) {
+            if (orders.isArray() && orders.size() > 0) {
                 List<Map<String, Object>> out = objectMapper.convertValue(
                         orders,
                         new TypeReference<List<Map<String, Object>>>() {});
