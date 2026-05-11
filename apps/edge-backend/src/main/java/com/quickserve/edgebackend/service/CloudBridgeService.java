@@ -28,6 +28,20 @@ public class CloudBridgeService {
         return !bridgeJwtToken.isBlank();
     }
 
+    /**
+     * Enrollment secrets are random alphanumeric; JWTs are three dot-separated base64url segments
+     * and typically start with "ey" (base64 of JSON header). Wrong paste → cloud returns 403.
+     */
+    public boolean bridgeJwtLooksPlausible() {
+        if (bridgeJwtToken.isBlank()) {
+            return false;
+        }
+        if (bridgeJwtToken.chars().filter(c -> c == '.').count() < 2) {
+            return false;
+        }
+        return bridgeJwtToken.startsWith("ey");
+    }
+
     public List<Map<String, Object>> fetchWaiterTables() {
         return restClient.get()
                 .uri("/waiter/tables")

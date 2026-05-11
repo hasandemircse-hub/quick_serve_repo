@@ -2572,16 +2572,33 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
   };
 
   bool _tokenNeverExpires(dynamic token) {
-    if (token['neverExpires'] == true) return true;
+    final v = token['neverExpires'];
+    if (v == true || v == 1) return true;
     final raw = token['expiresAt'];
     if (raw is String && raw.contains('9999')) return true;
     return false;
   }
 
+  /// Cloud [expiresAt] UTC duvar saati; `Z`/`+00:00` yoksa [DateTime.tryParse] cihaz yereline düşer ve EXPIRED yanlış çıkar.
   DateTime? _parseExpiresAtUtc(dynamic raw) {
     if (raw == null) return null;
     if (raw is! String) return null;
-    return DateTime.tryParse(raw);
+    final s = raw.trim();
+    if (s.contains('9999')) {
+      return DateTime.utc(9999, 12, 31, 23, 59, 59);
+    }
+    final hasExplicitOffset = s.endsWith('Z') ||
+        s.endsWith('+00:00') ||
+        RegExp(r'[+-]\d{2}:\d{2}$').hasMatch(s);
+    if (!hasExplicitOffset) {
+      final naive = RegExp(
+        r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$',
+      ).firstMatch(s);
+      if (naive != null) {
+        return DateTime.parse('${naive.group(0)}Z').toUtc();
+      }
+    }
+    return DateTime.tryParse(s)?.toUtc();
   }
 
   Color _tokenStatusColor(dynamic token) {
@@ -2746,9 +2763,9 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
                   ),
                   const Spacer(),
                   TextButton.icon(
-                    onPressed: () => _createEnrollmentToken(ttlMinutes: 0),
+                    onPressed: () => _createEnrollmentToken(ttlMinutes: 10080),
                     icon: const Icon(Icons.vpn_key_outlined),
-                    label: const Text('Süresiz Token Üret'),
+                    label: const Text('1 haftalık token üret'),
                   ),
                   TextButton(
                     onPressed: _cleanupEnrollmentTokens,

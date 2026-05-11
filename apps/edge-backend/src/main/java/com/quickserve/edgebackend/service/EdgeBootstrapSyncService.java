@@ -7,7 +7,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClientResponseException;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -47,6 +49,13 @@ public class EdgeBootstrapSyncService {
             log.debug("Edge bootstrap skipped: bridge JWT not configured");
             return false;
         }
+        if (!cloudBridgeService.bridgeJwtLooksPlausible()) {
+            log.warn(
+                    "Edge bootstrap skipped: EDGE_BRIDGE_JWT_TOKEN is not a JWT (expected eyJ... with dots). "
+                            + "The superadmin list value is the enrollment code only — call POST .../edge/enrollment/claim "
+                            + "with it, then set EDGE_BRIDGE_JWT_TOKEN to the bridgeJwtToken field from the JSON response.");
+            return false;
+        }
         if (configuredRestaurantId <= 0) {
             log.warn("Edge bootstrap skipped: app.edge.restaurant-id / EDGE_RESTAURANT_ID is not set");
             return false;
@@ -65,6 +74,12 @@ public class EdgeBootstrapSyncService {
             log.info("Edge bootstrap snapshot stored for restaurantId={}, schemaVersion={}",
                     configuredRestaurantId, version);
             return true;
+        } catch (RestClientResponseException ex) {
+            String body = ex.getResponseBodyAsString(StandardCharsets.UTF_8);
+            log.warn("Edge bootstrap pull failed: HTTP {} {} body={}",
+                    ex.getStatusCode().value(), ex.getStatusText(),
+                    body == null || body.isBlank() ? "(empty)" : body);
+            return false;
         } catch (Exception ex) {
             log.warn("Edge bootstrap pull failed: {}", ex.getMessage());
             return false;

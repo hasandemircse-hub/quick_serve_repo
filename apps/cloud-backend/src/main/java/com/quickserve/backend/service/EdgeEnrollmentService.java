@@ -26,7 +26,9 @@ import java.util.List;
 public class EdgeEnrollmentService {
 
     private static final int DEFAULT_TTL_MINUTES = 30;
-    private static final int NON_EXPIRING_TTL_MINUTES = 0;
+    /** Enrollment üretimi: paneldeki uzun süreli seçenek (süresiz 9999 yerine, istemci/DB uyumu için). */
+    private static final int ONE_WEEK_MINUTES = 7 * 24 * 60;
+    private static final int MAX_TTL_MINUTES = 365 * 24 * 60;
     private static final LocalDateTime NON_EXPIRING_EXPIRES_AT =
             LocalDateTime.of(9999, 12, 31, 23, 59, 59);
     private static final String TOKEN_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
@@ -42,10 +44,16 @@ public class EdgeEnrollmentService {
     @Transactional
     public EdgeEnrollmentTokenResponse createToken(Long restaurantId, Integer ttlMinutes) {
         Restaurant restaurant = restaurantService.findById(restaurantId);
-        int ttl = ttlMinutes == null ? DEFAULT_TTL_MINUTES : Math.max(ttlMinutes, NON_EXPIRING_TTL_MINUTES);
-        LocalDateTime expiresAt = ttl == NON_EXPIRING_TTL_MINUTES
-                ? NON_EXPIRING_EXPIRES_AT
-                : nowUtc().plusMinutes(ttl);
+        int ttl;
+        if (ttlMinutes == null) {
+            ttl = DEFAULT_TTL_MINUTES;
+        } else if (ttlMinutes <= 0) {
+            // Eski davranış: 0 = süresiz (9999). Flutter Web + ISO parse sorunlarına yol açıyordu.
+            ttl = ONE_WEEK_MINUTES;
+        } else {
+            ttl = Math.min(ttlMinutes, MAX_TTL_MINUTES);
+        }
+        LocalDateTime expiresAt = nowUtc().plusMinutes(ttl);
 
         EdgeEnrollmentToken token = EdgeEnrollmentToken.builder()
                 .restaurant(restaurant)
