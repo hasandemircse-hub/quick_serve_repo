@@ -1,22 +1,15 @@
+import 'api_runtime_config.dart';
+
 class ApiConstants {
-  static const String baseUrl = String.fromEnvironment(
-    'API_URL',
-    defaultValue: 'http://localhost:8080/api',
-  );
-  static const String cloudBaseUrl = String.fromEnvironment(
-    'CLOUD_API_URL',
-    defaultValue: baseUrl,
-  );
-  static const String edgeBaseUrl = String.fromEnvironment(
-    'EDGE_API_URL',
-    defaultValue: 'http://localhost:8081/api',
-  );
+  /// Çoğunlukla edge tabanı; runtime `edge_frontend.env` ile güncellenebilir.
+  static String get baseUrl => ApiRuntimeConfig.effectiveBaseUrl;
+
+  static String get cloudBaseUrl => ApiRuntimeConfig.effectiveCloudBaseUrl;
+
+  static String get edgeBaseUrl => ApiRuntimeConfig.effectiveEdgeBaseUrl;
 
   // Web admin URL (personel için gizli, sadece bilenler erişir)
-  static const String webAdminUrl = String.fromEnvironment(
-    'WEB_ADMIN_URL',
-    defaultValue: 'http://localhost:8080/auth/admin',
-  );
+  static String get webAdminUrl => ApiRuntimeConfig.effectiveWebAdminUrl;
 
   // Auth
   static const String login = '/auth/login';

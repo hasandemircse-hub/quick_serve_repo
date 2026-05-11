@@ -11,7 +11,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.InternalAuthenticationServiceException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +38,13 @@ public class AuthService {
         } catch (BadCredentialsException e) {
             auditService.logSecurityEvent(request.getUsername(), "LOGIN_FAILED",
                     "Invalid credentials", ipAddress);
+            throw new UnauthorizedException("Kullanıcı adı veya şifre hatalı");
+        } catch (InternalAuthenticationServiceException e) {
+            log.error("Login sırasında altyapı hatası (ör. DB veya kullanıcı yükleme): {}", e.getMessage(), e);
+            throw e;
+        } catch (AuthenticationException e) {
+            auditService.logSecurityEvent(request.getUsername(), "LOGIN_FAILED",
+                    e.getClass().getSimpleName(), ipAddress);
             throw new UnauthorizedException("Kullanıcı adı veya şifre hatalı");
         }
 

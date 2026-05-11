@@ -18,7 +18,14 @@ CLOUD="${CLOUD_API_URL:-http://192.168.139.157/api}"
 
 echo "EDGE_API_URL  -> $EDGE"
 echo "CLOUD_API_URL -> $CLOUD"
+WEB_PORT="${FLUTTER_WEB_PORT:-8088}"
+if command -v lsof >/dev/null 2>&1 && lsof -iTCP:"$WEB_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "UYARI: Port $WEB_PORT zaten dinlemede; Flutter bağlanamazsa rastgele port seçer." >&2
+  echo "   Boşalt: lsof -iTCP:$WEB_PORT -sTCP:LISTEN   veya: FLUTTER_WEB_PORT=9888 $0" >&2
+fi
 exec flutter run -d chrome \
+  --web-hostname=localhost \
+  --web-port="$WEB_PORT" \
   --dart-define=API_URL="$EDGE" \
   --dart-define=EDGE_API_URL="$EDGE" \
   --dart-define=CLOUD_API_URL="$CLOUD" \

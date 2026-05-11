@@ -33,6 +33,11 @@ class ApiClient {
     return _instance!;
   }
 
+  /// Taban URL runtime güncellenince (ör. edge_frontend.env) mevcut Dio örneklerini at.
+  static void clearForReconfiguration() {
+    _instance = null;
+  }
+
   Dio get dio => _cloudDio;
 
   BaseOptions _baseOptions(String baseUrl) => BaseOptions(

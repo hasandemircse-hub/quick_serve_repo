@@ -9,6 +9,10 @@ Bu klasör hedefte:
 
 Bu klasör artık bağımsız Flutter app entrypoint'i içerir.
 
+### API adresleri (`assets/edge_frontend.env`)
+
+Chrome / web için **cloud IP ve edge port** değerlerini `apps/edge-frontend/assets/edge_frontend.env` dosyasına yazın; uygulama açılışta `flutter_dotenv` ile okur (Spring `application.properties` veya `.env.edge` ile aynı değil — Flutter tarayıcıda çalıştığı için asset dosyası gerekir). İsteğe bağlı `--dart-define` hâlâ çalışır; dosyada dolu olan anahtarlar onların üzerine yazar.
+
 ## Edge sunucuda: sadece git + compose (önerilen)
 
 `.env.edge` içine **personel cihazının tarayıcısından** erişilecek adresleri yaz:
@@ -37,24 +41,18 @@ EDGE_API_URL=http://... CLOUD_API_URL=http://... ./apps/edge-frontend/build_web.
 
 ## Lokal doğrulama (Chrome)
 
-**Düz `flutter run -d chrome` kullanmayın.** `shared-frontend` içinde `CLOUD_API_URL` compile-time `String.fromEnvironment` ile gelir; argüman verilmezse cloud adresi **`http://localhost:8080/api`** kalır → login `POST .../auth/login` oraya gider ve `ERR_CONNECTION_REFUSED` görürsünüz.
-
-Repo kökündeki `.env.edge` dosyanızda `EDGE_API_URL` ve `CLOUD_API_URL` tanımlıysa:
-
-```bash
-chmod +x apps/edge-frontend/run_dev_chrome.sh
-./apps/edge-frontend/run_dev_chrome.sh
-```
-
-VS Code: kök `.vscode/launch.json` içindeki **Flutter edge-frontend (Chrome → cloud VM)** profilini seçin (içinde `--dart-define=CLOUD_API_URL=...` vardır). Alternatif: **Terminal → Run Task… → edge-frontend: Chrome (run_dev_chrome.sh)**.
+Önce `assets/edge_frontend.env` içindeki `CLOUD_API_URL` / `EDGE_API_URL` değerlerini düzenleyin. Sonra:
 
 ```bash
 cd apps/edge-frontend
 flutter pub get
-flutter analyze
+flutter run -d chrome
 ```
 
-Dart-define özet (web build ile aynı mantık):
+### Sabit port (ör. 8088) — neden bazen 65xxx olur?
 
-- `EDGE_API_URL` (edge API; default betikte: `http://127.0.0.1:8081/api`)
-- `CLOUD_API_URL` (JWT login ve müşteri tarafı cloud çağrıları; betikte yoksa `http://192.168.139.157/api`)
+`--web-port=8088` verilmiş olsa bile **8088 başka bir süreçte kullanılıyorsa** Flutter bağlanamaz ve **rastgele boş bir port** seçer (ör. 65210). Kontrol: `lsof -iTCP:8088 -sTCP:LISTEN` (macOS). Boş bir port seçin veya çakışan uygulamayı kapatın.
+
+VS Code: **Run and Debug** açılırken üstte **doğru launch profilini** seçtiğinizden emin olun (`.vscode/launch.json`). **web-server** profili: sunucu her zaman `http://localhost:8088`; Chrome’u elle bu adrese açın.
+
+İsteğe bağlı: `run_dev_chrome.sh` (port için `FLUTTER_WEB_PORT`) veya `--dart-define` ile geçici override.

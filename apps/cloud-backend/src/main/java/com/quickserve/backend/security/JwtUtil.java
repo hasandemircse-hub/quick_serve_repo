@@ -3,6 +3,7 @@ package com.quickserve.backend.security;
 import com.quickserve.backend.entity.User;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -25,6 +26,19 @@ public class JwtUtil {
 
     @Value("${app.jwt.expiration-ms}")
     private long expirationMs;
+
+    /** HS256 için JJWT en az 32 bayt UTF-8 anahtar ister; kısa sırada login 500 döner. */
+    @PostConstruct
+    void validateJwtSecret() {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException("app.jwt.secret / JWT_SECRET tanımlı olmalıdır.");
+        }
+        int len = secret.getBytes(StandardCharsets.UTF_8).length;
+        if (len < 32) {
+            throw new IllegalStateException(
+                    "app.jwt.secret en az 32 UTF-8 bayt olmalı (şu an " + len + " bayt). Uzun bir JWT_SECRET kullanın.");
+        }
+    }
 
     private SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));

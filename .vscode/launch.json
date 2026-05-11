@@ -1,4 +1,5 @@
 {
+    "version": "0.2.0",
     "configurations": [
         {
             "type": "java",
@@ -30,10 +31,39 @@
             "cwd": "${workspaceFolder}/apps/edge-frontend",
             "program": "lib/main.dart",
             "deviceId": "chrome",
-            "args": [
-                "--dart-define=API_URL=http://127.0.0.1:8081/api",
-                "--dart-define=EDGE_API_URL=http://127.0.0.1:8081/api",
-                "--dart-define=CLOUD_API_URL=http://192.168.139.157/api"
+            "console": "terminal",
+            "toolArgs": [
+                "--web-hostname",
+                "localhost",
+                "--web-port",
+                "8088",
+                "--dart-define",
+                "API_URL=http://127.0.0.1:8081/api",
+                "--dart-define",
+                "EDGE_API_URL=http://127.0.0.1:8081/api",
+                "--dart-define",
+                "CLOUD_API_URL=http://192.168.139.157/api"
+            ]
+        },
+        {
+            "name": "Flutter edge-frontend (web-server :8088 → elle Chrome)",
+            "request": "launch",
+            "type": "dart",
+            "cwd": "${workspaceFolder}/apps/edge-frontend",
+            "program": "lib/main.dart",
+            "deviceId": "web-server",
+            "console": "terminal",
+            "toolArgs": [
+                "--web-hostname",
+                "localhost",
+                "--web-port",
+                "8088",
+                "--dart-define",
+                "API_URL=http://127.0.0.1:8081/api",
+                "--dart-define",
+                "EDGE_API_URL=http://127.0.0.1:8081/api",
+                "--dart-define",
+                "CLOUD_API_URL=http://192.168.139.157/api"
             ]
         }
     ]
