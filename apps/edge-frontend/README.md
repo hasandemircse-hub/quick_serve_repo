@@ -35,7 +35,18 @@ Arayüz: `http://<SUNUCU_IP>:8082` (veya `EDGE_FRONTEND_PORT`). İlk build Flutt
 EDGE_API_URL=http://... CLOUD_API_URL=http://... ./apps/edge-frontend/build_web.sh
 ```
 
-## Lokal doğrulama
+## Lokal doğrulama (Chrome)
+
+**Düz `flutter run -d chrome` kullanmayın.** `shared-frontend` içinde `CLOUD_API_URL` compile-time `String.fromEnvironment` ile gelir; argüman verilmezse cloud adresi **`http://localhost:8080/api`** kalır → login `POST .../auth/login` oraya gider ve `ERR_CONNECTION_REFUSED` görürsünüz.
+
+Repo kökündeki `.env.edge` dosyanızda `EDGE_API_URL` ve `CLOUD_API_URL` tanımlıysa:
+
+```bash
+chmod +x apps/edge-frontend/run_dev_chrome.sh
+./apps/edge-frontend/run_dev_chrome.sh
+```
+
+VS Code: kök `.vscode/launch.json` içindeki **Flutter edge-frontend (Chrome → cloud VM)** profilini seçin (içinde `--dart-define=CLOUD_API_URL=...` vardır). Alternatif: **Terminal → Run Task… → edge-frontend: Chrome (run_dev_chrome.sh)**.
 
 ```bash
 cd apps/edge-frontend
@@ -43,7 +54,7 @@ flutter pub get
 flutter analyze
 ```
 
-Opsiyonel env:
+Dart-define özet (web build ile aynı mantık):
 
-- `EDGE_API_URL` (default: `http://localhost:8081/api`)
-- `CLOUD_API_URL` (default: `http://localhost:8080/api`)
+- `EDGE_API_URL` (edge API; default betikte: `http://127.0.0.1:8081/api`)
+- `CLOUD_API_URL` (JWT login ve müşteri tarafı cloud çağrıları; betikte yoksa `http://192.168.139.157/api`)
