@@ -5,6 +5,6 @@ import lombok.Data;
 
 @Data
 public class EdgeEnrollmentTokenRequest {
-    @Min(1)
+    @Min(0)
     private Integer ttlMinutes;
 }

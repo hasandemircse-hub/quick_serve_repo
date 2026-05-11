@@ -17,6 +17,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 @Service
@@ -24,6 +26,9 @@ import java.util.List;
 public class EdgeEnrollmentService {
 
     private static final int DEFAULT_TTL_MINUTES = 30;
+    private static final int NON_EXPIRING_TTL_MINUTES = 0;
+    private static final LocalDateTime NON_EXPIRING_EXPIRES_AT =
+            LocalDateTime.of(9999, 12, 31, 23, 59, 59);
     private static final String TOKEN_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 
     private final EdgeEnrollmentTokenRepository tokenRepository;
@@ -37,12 +42,15 @@ public class EdgeEnrollmentService {
     @Transactional
     public EdgeEnrollmentTokenResponse createToken(Long restaurantId, Integer ttlMinutes) {
         Restaurant restaurant = restaurantService.findById(restaurantId);
-        int ttl = (ttlMinutes == null || ttlMinutes < 1) ? DEFAULT_TTL_MINUTES : ttlMinutes;
+        int ttl = ttlMinutes == null ? DEFAULT_TTL_MINUTES : Math.max(ttlMinutes, NON_EXPIRING_TTL_MINUTES);
+        LocalDateTime expiresAt = ttl == NON_EXPIRING_TTL_MINUTES
+                ? NON_EXPIRING_EXPIRES_AT
+                : nowUtc().plusMinutes(ttl);
 
         EdgeEnrollmentToken token = EdgeEnrollmentToken.builder()
                 .restaurant(restaurant)
                 .token(generateToken(32))
-                .expiresAt(LocalDateTime.now().plusMinutes(ttl))
+                .expiresAt(expiresAt)
                 .build();
         return toDto(tokenRepository.save(token));
     }
@@ -64,7 +72,7 @@ public class EdgeEnrollmentService {
 
         if (!Boolean.TRUE.equals(token.getIsUsed())) {
             token.setIsUsed(true);
-            token.setUsedAt(LocalDateTime.now());
+            token.setUsedAt(nowUtc());
             tokenRepository.save(token);
         }
         return toDto(token);
@@ -78,7 +86,8 @@ public class EdgeEnrollmentService {
         if (Boolean.TRUE.equals(enrollmentToken.getIsUsed())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enrollment token already used");
         }
-        if (enrollmentToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+        if (!isNonExpiring(enrollmentToken.getExpiresAt()) &&
+                enrollmentToken.getExpiresAt().isBefore(nowUtc())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Enrollment token expired");
         }
 
@@ -90,7 +99,7 @@ public class EdgeEnrollmentService {
         );
 
         enrollmentToken.setIsUsed(true);
-        enrollmentToken.setUsedAt(LocalDateTime.now());
+        enrollmentToken.setUsedAt(nowUtc());
         tokenRepository.save(enrollmentToken);
 
         auditService.logSecurityEvent(
@@ -112,7 +121,7 @@ public class EdgeEnrollmentService {
 
     @Transactional
     public int cleanupExpiredTokens() {
-        List<EdgeEnrollmentToken> expiredTokens = tokenRepository.findByExpiresAtBefore(LocalDateTime.now());
+        List<EdgeEnrollmentToken> expiredTokens = tokenRepository.findByExpiresAtBefore(nowUtc());
         if (expiredTokens.isEmpty()) return 0;
         tokenRepository.deleteAll(expiredTokens);
         return expiredTokens.size();
@@ -153,14 +162,32 @@ public class EdgeEnrollmentService {
     }
 
     private EdgeEnrollmentTokenResponse toDto(EdgeEnrollmentToken token) {
+        OffsetDateTime expiresAtUtc = toUtc(token.getExpiresAt());
+        OffsetDateTime usedAtUtc = toUtc(token.getUsedAt());
+        OffsetDateTime createdAtUtc = toUtc(token.getCreatedAt());
         return EdgeEnrollmentTokenResponse.builder()
                 .id(token.getId())
                 .restaurantId(token.getRestaurant().getId())
                 .token(token.getToken())
                 .isUsed(token.getIsUsed())
-                .expiresAt(token.getExpiresAt())
-                .usedAt(token.getUsedAt())
-                .createdAt(token.getCreatedAt())
+                .expiresAt(expiresAtUtc)
+                .usedAt(usedAtUtc)
+                .createdAt(createdAtUtc)
                 .build();
+    }
+
+    private boolean isNonExpiring(LocalDateTime expiresAt) {
+        return expiresAt != null && expiresAt.getYear() >= 9999;
+    }
+
+    private LocalDateTime nowUtc() {
+        return LocalDateTime.now(ZoneOffset.UTC);
+    }
+
+    private OffsetDateTime toUtc(LocalDateTime value) {
+        if (value == null) {
+            return null;
+        }
+        return value.atOffset(ZoneOffset.UTC);
     }
 }

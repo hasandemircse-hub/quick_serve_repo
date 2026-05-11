@@ -2577,8 +2577,10 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
     final expiresAt = expiresAtRaw == null
         ? null
         : DateTime.tryParse(expiresAtRaw);
+    final neverExpires = expiresAt != null && expiresAt.year >= 9999;
     final isExpired = expiresAt != null && expiresAt.isBefore(DateTime.now());
     if (isUsed) return Colors.blueGrey;
+    if (neverExpires) return Colors.teal;
     if (isExpired) return Colors.red;
     return Colors.green;
   }
@@ -2589,8 +2591,10 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
     final expiresAt = expiresAtRaw == null
         ? null
         : DateTime.tryParse(expiresAtRaw);
+    final neverExpires = expiresAt != null && expiresAt.year >= 9999;
     final isExpired = expiresAt != null && expiresAt.isBefore(DateTime.now());
     if (isUsed) return 'USED';
+    if (neverExpires) return 'NEVER_EXPIRES';
     if (isExpired) return 'EXPIRED';
     return 'ACTIVE';
   }
@@ -2735,9 +2739,9 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
                   ),
                   const Spacer(),
                   TextButton.icon(
-                    onPressed: () => _createEnrollmentToken(ttlMinutes: 30),
+                    onPressed: () => _createEnrollmentToken(ttlMinutes: 0),
                     icon: const Icon(Icons.vpn_key_outlined),
-                    label: const Text('Token Üret'),
+                    label: const Text('Süresiz Token Üret'),
                   ),
                   TextButton(
                     onPressed: _cleanupEnrollmentTokens,
@@ -2766,7 +2770,7 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: Text(
-                      'expiresAt: ${tokenItem['expiresAt'] ?? '-'}',
+                      'expiresAt(UTC): ${tokenItem['expiresAt'] ?? '-'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
