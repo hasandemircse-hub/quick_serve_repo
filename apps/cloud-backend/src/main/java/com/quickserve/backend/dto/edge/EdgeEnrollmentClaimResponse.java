@@ -8,4 +8,5 @@ import lombok.Data;
 public class EdgeEnrollmentClaimResponse {
     private Long restaurantId;
     private EdgeNodeResponse edgeNode;
+    private String bridgeJwtToken;
 }

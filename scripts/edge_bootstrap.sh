@@ -25,6 +25,7 @@ REST_ID=""
 NODE_ID=""
 IMAGE_REPO="${EDGE_IMAGE_REPOSITORY:-ghcr.io/hasandemircse-hub/quick_serve/quickserve-edge-backend}"
 IMAGE_TAG="${EDGE_IMAGE_TAG:-latest}"
+BRIDGE_JWT=""
 
 usage() {
   cat <<'EOF'
@@ -67,6 +68,35 @@ if [[ -z "$NODE_ID" ]]; then
   [[ -z "$NODE_ID" || "$NODE_ID" == "quickserve-" ]] && NODE_ID="quickserve-local"
 fi
 
+# Enrollment claim: edge node kaydı + bridge JWT üretimi (kullanıcı login bağımsız sync).
+claim_payload="$(cat <<EOF
+{"token":"$TOKEN","nodeName":"$NODE_ID","deviceType":"MINI_PC","localIp":"127.0.0.1"}
+EOF
+)"
+claim_resp="$(curl -fsS -X POST "${CLOUD_BASE%/}/edge/enrollment/claim" \
+  -H "Content-Type: application/json" \
+  -d "$claim_payload")" || {
+  echo "HATA: enrollment claim başarısız. CLOUD_BASE/TOKEN doğrula."
+  exit 1
+}
+
+BRIDGE_JWT="$(python3 - <<'PY' "$claim_resp"
+import json,sys
+raw=sys.argv[1]
+try:
+    data=json.loads(raw)
+    print(data.get("bridgeJwtToken",""))
+except Exception:
+    print("")
+PY
+)"
+
+if [[ -z "$BRIDGE_JWT" ]]; then
+  echo "HATA: claim yanıtında bridgeJwtToken yok."
+  echo "Yanıt: $claim_resp"
+  exit 1
+fi
+
 umask 077
 cat >"$ENV_OUT" <<EOF
 # edge_bootstrap.sh tarafından üretildi — $(date -Iseconds 2>/dev/null || date)
@@ -74,7 +104,7 @@ EDGE_NODE_ID=${NODE_ID}
 EDGE_RESTAURANT_ID=${REST_ID}
 EDGE_CLOUD_BASE_URL=${CLOUD_BASE}
 EDGE_ENROLLMENT_TOKEN=${TOKEN}
-EDGE_BRIDGE_JWT_TOKEN=
+EDGE_BRIDGE_JWT_TOKEN=${BRIDGE_JWT}
 EDGE_SQLITE_PATH=/data/edge.db
 EDGE_IMAGE_REPOSITORY=${IMAGE_REPO}
 EDGE_IMAGE_TAG=${IMAGE_TAG}

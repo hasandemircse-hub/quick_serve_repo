@@ -3,8 +3,12 @@ package com.quickserve.backend.service;
 import com.quickserve.backend.dto.edge.*;
 import com.quickserve.backend.entity.EdgeEnrollmentToken;
 import com.quickserve.backend.entity.Restaurant;
+import com.quickserve.backend.entity.User;
+import com.quickserve.backend.enums.UserRole;
 import com.quickserve.backend.exception.ResourceNotFoundException;
 import com.quickserve.backend.repository.EdgeEnrollmentTokenRepository;
+import com.quickserve.backend.repository.UserRepository;
+import com.quickserve.backend.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -26,6 +30,8 @@ public class EdgeEnrollmentService {
     private final RestaurantService restaurantService;
     private final EdgeNodeService edgeNodeService;
     private final AuditService auditService;
+    private final UserRepository userRepository;
+    private final JwtUtil jwtUtil;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional
@@ -94,9 +100,13 @@ public class EdgeEnrollmentService {
                 request.getLocalIp()
         );
 
+        User bridgePrincipal = resolveBridgePrincipal(enrollmentToken.getRestaurant().getId());
+        String bridgeJwtToken = jwtUtil.generateToken(bridgePrincipal);
+
         return EdgeEnrollmentClaimResponse.builder()
                 .restaurantId(enrollmentToken.getRestaurant().getId())
                 .edgeNode(edgeNode)
+                .bridgeJwtToken(bridgeJwtToken)
                 .build();
     }
 
@@ -115,6 +125,31 @@ public class EdgeEnrollmentService {
             sb.append(TOKEN_CHARS.charAt(idx));
         }
         return sb.toString();
+    }
+
+    /**
+     * Edge cloud bridge için kullanıcı-bağımsız servis token:
+     * 1) Restoran admin (aktif) varsa onu kullan
+     * 2) Yoksa aktif waiter/head waiter/chef/valet
+     * 3) Son çare: superadmin
+     */
+    private User resolveBridgePrincipal(Long restaurantId) {
+        List<User> admins = userRepository.findByRestaurantIdAndRoleAndIsActiveTrue(restaurantId, UserRole.RESTAURANT_ADMIN);
+        if (!admins.isEmpty()) {
+            return admins.getFirst();
+        }
+        for (UserRole role : List.of(UserRole.HEAD_WAITER, UserRole.WAITER, UserRole.CHEF, UserRole.VALET)) {
+            List<User> staff = userRepository.findByRestaurantIdAndRoleAndIsActiveTrue(restaurantId, role);
+            if (!staff.isEmpty()) {
+                return staff.getFirst();
+            }
+        }
+        return userRepository.findAllSuperadmins().stream()
+                .filter(u -> Boolean.TRUE.equals(u.getIsActive()))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "No active principal found for edge bridge token"));
     }
 
     private EdgeEnrollmentTokenResponse toDto(EdgeEnrollmentToken token) {

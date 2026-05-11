@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -74,6 +75,33 @@ public class EdgeOpsController {
                 "source", "EDGE_ADMIN"
         ));
         return ResponseEntity.ok(Map.of("status", "accepted", "paymentId", request.paymentId()));
+    }
+
+    @PostMapping("/waiter/calls/{callId}/assign")
+    public ResponseEntity<Map<String, Object>> assignWaiterCall(@PathVariable String callId) {
+        enqueueDomainEvent("CALL", callId, "CALL_ASSIGNED", Map.of(
+                "callId", callId,
+                "source", "EDGE_WAITER"
+        ));
+        return ResponseEntity.ok(Map.of("status", "accepted", "callId", callId));
+    }
+
+    @PostMapping("/waiter/calls/{callId}/resolve")
+    public ResponseEntity<Map<String, Object>> resolveWaiterCall(@PathVariable String callId) {
+        enqueueDomainEvent("CALL", callId, "CALL_RESOLVED", Map.of(
+                "callId", callId,
+                "source", "EDGE_WAITER"
+        ));
+        return ResponseEntity.ok(Map.of("status", "accepted", "callId", callId));
+    }
+
+    @PostMapping("/waiter/orders/{orderId}/deliver")
+    public ResponseEntity<Map<String, Object>> deliverWaiterOrder(@PathVariable String orderId) {
+        enqueueDomainEvent("ORDER", orderId, "ORDER_DELIVERED", Map.of(
+                "orderId", orderId,
+                "source", "EDGE_WAITER"
+        ));
+        return ResponseEntity.ok(Map.of("status", "accepted", "orderId", orderId));
     }
 
     private void enqueueDomainEvent(String aggregateType, String aggregateId, String eventType, Map<String, Object> payload) {

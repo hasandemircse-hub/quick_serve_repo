@@ -1,4 +1,6 @@
-version: '3.9'
+# Gizli değişkenler: bu dizinde `.env` dosyası olmalı (`cp .env.example .env`).
+# `backend` servisi `env_file: .env` ile DB_PASSWORD, JWT_SECRET, SUPERADMIN_* alır;
+# boş JWT_SECRET → login 500.
 
 services:
   postgres:
@@ -25,13 +27,13 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: quickserve
       DB_USERNAME: ${DB_USERNAME:-quickserve}
-      DB_PASSWORD: ${DB_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
@@ -40,8 +42,6 @@ services:
       NETGSM_PASSWORD: ${NETGSM_PASSWORD:-}
       NETGSM_HEADER: ${NETGSM_HEADER:-QUICKSERVE}
       SUPERADMIN_USERNAME: ${SUPERADMIN_USERNAME:-superadmin}
-      SUPERADMIN_PASSWORD: ${SUPERADMIN_PASSWORD}
-      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL}
       SUPERADMIN_PHONE: ${SUPERADMIN_PHONE:-}
     volumes:
       - backend_logs:/app/logs
