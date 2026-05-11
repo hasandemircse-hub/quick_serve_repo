@@ -2221,6 +2221,11 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
   late List<dynamic> _enrollmentTokens;
   bool _saving = false;
 
+  late final TextEditingController _claimTokenCtrl;
+  late final TextEditingController _claimNodeNameCtrl;
+  bool _claimBusy = false;
+  String? _lastBridgeJwt;
+
   static const List<String> _allFeatureCodes = [
     'POS',
     'BILL_PRINTING',
@@ -2238,6 +2243,94 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
     for (final item in widget.initialFeatureFlags) {
       final code = item['featureCode'] as String?;
       if (code != null) _featureFlags[code] = item['enabled'] == true;
+    }
+    _claimTokenCtrl = TextEditingController();
+    _claimNodeNameCtrl = TextEditingController(
+      text: 'edge-${widget.restaurantId}',
+    );
+  }
+
+  @override
+  void dispose() {
+    _claimTokenCtrl.dispose();
+    _claimNodeNameCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _claimEnrollmentAndFetchBridgeJwt() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final token = _claimTokenCtrl.text.trim();
+    final nodeName = _claimNodeNameCtrl.text.trim();
+    if (token.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Önce yukarıdan ürettiğin enrollment kodunu yapıştır'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    if (nodeName.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Edge node adı boş olamaz'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _claimBusy = true;
+      _lastBridgeJwt = null;
+    });
+    try {
+      final res = await ApiClient.instance.post(
+        ApiConstants.edgeEnrollmentClaim,
+        data: <String, dynamic>{
+          'token': token,
+          'nodeName': nodeName,
+          'deviceType': 'MINI_PC',
+          'localIp': '127.0.0.1',
+        },
+      );
+      if (!mounted) return;
+      final body = res.data;
+      if (body is! Map) {
+        throw StateError('Beklenmeyen yanıt');
+      }
+      final jwt = body['bridgeJwtToken'] as String?;
+      if (jwt == null || jwt.isEmpty) {
+        throw StateError('Yanıtta bridgeJwtToken yok');
+      }
+      final nodesRes = await ApiClient.instance.get(
+        '${ApiConstants.superadminRestaurants}/${widget.restaurantId}/edge-nodes',
+      );
+      final tokensRes = await ApiClient.instance.get(
+        '${ApiConstants.superadminRestaurants}/${widget.restaurantId}/edge-enrollment-tokens',
+      );
+      if (!mounted) return;
+      setState(() {
+        _lastBridgeJwt = jwt;
+        _edgeNodes = List<dynamic>.from(nodesRes.data as List);
+        _enrollmentTokens = List<dynamic>.from(tokensRes.data as List);
+      });
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Köprü anahtarı hazır. Aşağıdan kopyalayıp edge tarafındaki .env.edge içinde EDGE_BRIDGE_JWT_TOKEN satırına yapıştır.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(apiErrorMessage(e)),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _claimBusy = false);
     }
   }
 
@@ -2773,6 +2866,82 @@ class _EdgeSettingsSheetState extends State<_EdgeSettingsSheet> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              Card(
+                margin: EdgeInsets.zero,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Köprü anahtarı (.env.edge)',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Swagger gerekmez: kısa enrollment kodunu yapıştır, cloud uzun köprü anahtarını üretsin. Kod tek kullanımlıktır.',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.outline,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _claimTokenCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Enrollment kodu',
+                          border: OutlineInputBorder(),
+                          hintText: 'Paneldeki kısa kod',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _claimNodeNameCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Edge node adı',
+                          border: OutlineInputBorder(),
+                          hintText: 'ör. edge-001',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      FilledButton(
+                        onPressed: _claimBusy ? null : _claimEnrollmentAndFetchBridgeJwt,
+                        child: _claimBusy
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Text('Köprü anahtarını al'),
+                      ),
+                      if (_lastBridgeJwt != null) ...[
+                        const SizedBox(height: 14),
+                        const Text(
+                          'EDGE_BRIDGE_JWT_TOKEN',
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(height: 6),
+                        SelectableText(
+                          _lastBridgeJwt!,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        TextButton.icon(
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: _lastBridgeJwt!));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Panoya kopyalandı')),
+                            );
+                          },
+                          icon: const Icon(Icons.copy, size: 18),
+                          label: const Text('Kopyala'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
               if (_enrollmentTokens.isEmpty)
                 const Text(
                   'Henüz enrollment token yok',

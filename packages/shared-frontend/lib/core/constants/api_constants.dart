@@ -64,6 +64,9 @@ class ApiConstants {
   static const String adminStaff = '/admin/staff';
   static const String adminReviews = '/admin/reviews';
 
+  /// Edge cihazı kaydı (public); köprü JWT burada döner.
+  static const String edgeEnrollmentClaim = '/edge/enrollment/claim';
+
   // Superadmin
   static const String superadminRestaurants = '/superadmin/restaurants';
   static const String superadminEdgeNodes = '/superadmin/edge-nodes';

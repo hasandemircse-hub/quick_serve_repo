@@ -48,6 +48,10 @@ class ApiClient {
   );
 
   bool _isEdgePath(String path) {
+    // Edge enrollment claim cloud-backend'te; edge-backend'te yok.
+    if (path.startsWith('/edge/enrollment')) {
+      return false;
+    }
     const edgePrefixes = <String>[
       '/edge',
       '/waiter',
