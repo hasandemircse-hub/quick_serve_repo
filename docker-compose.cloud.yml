@@ -9,7 +9,8 @@ services:
     volumes:
       - cloud_postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # Ana docker-compose (quickserve_db) 5432 kullanıyorsa çakışmayı önler; hosttan: localhost:5433
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${CLOUD_DB_USERNAME:-quickserve}"]
       interval: 10s

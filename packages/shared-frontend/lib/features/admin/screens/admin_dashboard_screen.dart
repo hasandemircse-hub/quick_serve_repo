@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +11,7 @@ import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/storage/local_storage.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/widgets/edge_nodes_cloud_status_strip.dart';
 import '../../../core/widgets/offline_status_banner.dart';
 import '../../../core/widgets/sync_lag_indicator.dart';
 
@@ -28,6 +30,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
   List<dynamic> _staff = [];
   List<dynamic> _menuItems = [];
   List<dynamic> _categories = [];
+  List<dynamic> _edgeNodes = [];
   bool _loading = true;
 
   String _username = '';
@@ -62,6 +65,14 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
     });
   }
 
+  Future<Response?> _loadEdgeNodesOptional() async {
+    try {
+      return await ApiClient.instance.get(ApiConstants.adminEdgeNodes);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _loadData({bool showLoading = false}) async {
     if (showLoading) setState(() => _loading = true);
     try {
@@ -71,13 +82,30 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
         ApiClient.instance.get(ApiConstants.adminMenuItems),
         ApiClient.instance.get(ApiConstants.adminMenuCategories),
         ApiClient.instance.get(ApiConstants.adminTableGroups),
+        _loadEdgeNodesOptional(),
       ]);
       setState(() {
-        _tables = List<dynamic>.from(results[0].data);
-        _staff = List<dynamic>.from(results[1].data);
-        _menuItems = List<dynamic>.from(results[2].data);
-        _categories = List<dynamic>.from(results[3].data);
-        _tableGroups = List<dynamic>.from(results[4].data);
+        final t0 = results[0] as Response;
+        final t1 = results[1] as Response;
+        final t2 = results[2] as Response;
+        final t3 = results[3] as Response;
+        final t4 = results[4] as Response;
+        _tables = List<dynamic>.from(t0.data);
+        _staff = List<dynamic>.from(t1.data);
+        _menuItems = List<dynamic>.from(t2.data);
+        _categories = List<dynamic>.from(t3.data);
+        _tableGroups = List<dynamic>.from(t4.data);
+        final edgeMaybe = results[5];
+        if (edgeMaybe is Response) {
+          final edgeRaw = edgeMaybe.data;
+          if (edgeRaw is List) {
+            _edgeNodes = List<dynamic>.from(edgeRaw);
+          } else {
+            _edgeNodes = [];
+          }
+        } else {
+          _edgeNodes = [];
+        }
         _loading = false;
       });
     } catch (e) {
@@ -154,6 +182,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen>
       ),
       body: Column(
         children: [
+          EdgeNodesCloudStatusStrip(nodes: _edgeNodes),
           const OfflineStatusBanner(),
           const SyncLagIndicator(),
           Expanded(

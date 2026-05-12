@@ -20,4 +20,6 @@ public class EdgeNodeResponse {
     private LocalDateTime lastSyncAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /** Son heartbeat zamanına göre (sunucu saati); UI çevrimiçi göstergesi için. */
+    private Boolean effectiveOnline;
 }

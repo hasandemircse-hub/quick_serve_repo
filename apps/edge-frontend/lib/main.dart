@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:shared_frontend/core/providers/edge_shell_providers.dart';
 import 'package:shared_frontend/shared_frontend.dart';
 
 Future<void> main() async {
@@ -14,6 +15,7 @@ Future<void> main() async {
   await runQuickServeApp(
     providerOverrides: [
       appInitialLocationProvider.overrideWith((ref) => '/login'),
+      showEdgeCloudLinkBannerProvider.overrideWith((ref) => true),
     ],
   );
 }

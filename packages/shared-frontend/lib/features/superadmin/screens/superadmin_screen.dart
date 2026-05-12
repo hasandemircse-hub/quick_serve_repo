@@ -8,6 +8,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/storage/local_storage.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/widgets/edge_nodes_cloud_status_strip.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 // SuperadminScreen — Restoran listesi
@@ -253,8 +254,12 @@ class _SuperadminScreenState extends ConsumerState<SuperadminScreen> {
                             itemCount: _restaurants.length,
                             itemBuilder: (ctx, i) {
                               final r = _restaurants[i];
+                              final rid = (r['id'] as num?)?.toInt();
                               return _RestaurantCard(
                                 restaurant: r,
+                                edgeNodes: rid != null
+                                    ? (_edgeNodesByRestaurant[rid] ?? const [])
+                                    : const [],
                                 onTap: () => _doImpersonate(context, r),
                                 onEdit: () =>
                                     _showEditRestaurantDialog(context, r),
@@ -892,11 +897,12 @@ class _SuperadminScreenState extends ConsumerState<SuperadminScreen> {
     int offline = 0;
     for (final nodes in _edgeNodesByRestaurant.values) {
       for (final node in nodes) {
+        if (edgeNodeEffectiveOnline(node)) {
+          online++;
+          continue;
+        }
         final status = (node['status'] as String?) ?? 'OFFLINE';
         switch (status) {
-          case 'ONLINE':
-            online++;
-            break;
           case 'DEGRADED':
             degraded++;
             break;
@@ -1140,6 +1146,7 @@ class _SuperadminScreenState extends ConsumerState<SuperadminScreen> {
 
 class _RestaurantCard extends StatelessWidget {
   final dynamic restaurant;
+  final List<dynamic> edgeNodes;
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onStaff;
@@ -1153,6 +1160,7 @@ class _RestaurantCard extends StatelessWidget {
 
   const _RestaurantCard({
     required this.restaurant,
+    this.edgeNodes = const [],
     required this.onTap,
     required this.onEdit,
     required this.onStaff,
@@ -1254,6 +1262,7 @@ class _RestaurantCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    EdgeNodesCloudStatusStrip(nodes: edgeNodes, compact: true),
                   ],
                 ),
               ),

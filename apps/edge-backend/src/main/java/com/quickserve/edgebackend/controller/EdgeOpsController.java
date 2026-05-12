@@ -70,12 +70,27 @@ public class EdgeOpsController {
 
     @PostMapping("/kitchen/orders/status")
     public ResponseEntity<Map<String, Object>> updateKitchenOrderStatus(@Valid @RequestBody KitchenStatusUpdateRequest request) {
-        Map<String, Object> payload = basePayload("ORDER", request.orderId());
-        payload.put("orderId", request.orderId());
-        payload.put("status", request.status());
+        return kitchenStatusChange(request.orderId(), request.status());
+    }
+
+    /** Cloud {@code KitchenController} ile aynı yollar — Flutter mutfak ekranı bunları kullanır. */
+    @PostMapping("/kitchen/orders/{orderId}/start")
+    public ResponseEntity<Map<String, Object>> kitchenStartPreparing(@PathVariable String orderId) {
+        return kitchenStatusChange(orderId, "PREPARING");
+    }
+
+    @PostMapping("/kitchen/orders/{orderId}/ready")
+    public ResponseEntity<Map<String, Object>> kitchenMarkReady(@PathVariable String orderId) {
+        return kitchenStatusChange(orderId, "READY");
+    }
+
+    private ResponseEntity<Map<String, Object>> kitchenStatusChange(String orderId, String status) {
+        Map<String, Object> payload = basePayload("ORDER", orderId);
+        payload.put("orderId", orderId);
+        payload.put("status", status);
         payload.put("source", "EDGE_KITCHEN");
         enqueueWriteThrough("ORDER_STATUS_UPDATED", payload);
-        return ResponseEntity.ok(Map.of("status", "accepted", "orderId", request.orderId()));
+        return ResponseEntity.ok(Map.of("status", "accepted", "orderId", orderId));
     }
 
     @PostMapping("/admin/payments/mark-paid")

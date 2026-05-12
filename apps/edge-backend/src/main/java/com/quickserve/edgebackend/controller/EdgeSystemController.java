@@ -8,9 +8,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import com.quickserve.edgebackend.service.CloudBridgeService;
 import com.quickserve.edgebackend.service.EdgeBootstrapSyncService;
+import com.quickserve.edgebackend.service.EdgeCloudLinkTracker;
 import com.quickserve.edgebackend.service.EdgeSyncInboxService;
 import com.quickserve.edgebackend.service.EdgeSyncOutboxService;
 
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,17 +25,20 @@ public class EdgeSystemController {
     private final EdgeSyncInboxService inboxService;
     private final CloudBridgeService cloudBridgeService;
     private final EdgeBootstrapSyncService bootstrapSyncService;
+    private final EdgeCloudLinkTracker edgeCloudLinkTracker;
 
     public EdgeSystemController(
             EdgeSyncOutboxService outboxService,
             EdgeSyncInboxService inboxService,
             CloudBridgeService cloudBridgeService,
-            EdgeBootstrapSyncService bootstrapSyncService
+            EdgeBootstrapSyncService bootstrapSyncService,
+            EdgeCloudLinkTracker edgeCloudLinkTracker
     ) {
         this.outboxService = outboxService;
         this.inboxService = inboxService;
         this.cloudBridgeService = cloudBridgeService;
         this.bootstrapSyncService = bootstrapSyncService;
+        this.edgeCloudLinkTracker = edgeCloudLinkTracker;
     }
 
     @Value("${app.edge.node-id:unknown}")
@@ -45,6 +50,9 @@ public class EdgeSystemController {
     @Value("${app.edge.cloud-base-url:http://localhost:8080/api}")
     private String cloudBaseUrl;
 
+    @Value("${app.edge.heartbeat-enabled:true}")
+    private boolean heartbeatEnabled;
+
     @GetMapping("/info")
     public ResponseEntity<Map<String, Object>> info() {
         return ResponseEntity.ok(Map.of(
@@ -52,6 +60,37 @@ public class EdgeSystemController {
                 "nodeId", nodeId,
                 "restaurantId", restaurantId
         ));
+    }
+
+    /**
+     * Personel uygulaması üst bandı: cloud köprüsü ve son başarılı heartbeat özeti.
+     */
+    @GetMapping("/cloud-link")
+    public ResponseEntity<Map<String, Object>> cloudLink() {
+        boolean tryLive = cloudBridgeService.shouldTryCloudLive();
+        Instant lastOk = edgeCloudLinkTracker.getLastHeartbeatSuccessAt();
+        Instant lastAttempt = edgeCloudLinkTracker.getLastHeartbeatAttemptAt();
+        boolean heartbeatConfigured = heartbeatEnabled && restaurantId > 0 && nodeId != null && !nodeId.isBlank();
+        boolean recentlyOk = lastOk != null && lastOk.isAfter(Instant.now().minusSeconds(90));
+        EdgeSyncOutboxService.SyncQueueStats outbox = outboxService.getQueueStats();
+        long lagSeconds = outbox.oldestWaitingAgeSeconds() == null ? 0L : outbox.oldestWaitingAgeSeconds();
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("nodeId", nodeId);
+        body.put("restaurantId", restaurantId);
+        body.put("bridgeConfigured", cloudBridgeService.isBridgeConfigured());
+        body.put("bridgeJwtShapeOk", cloudBridgeService.skipCloudJwt()
+                || cloudBridgeService.bridgeJwtLooksPlausible());
+        body.put("tryCloudLive", tryLive);
+        body.put("heartbeatEnabled", heartbeatEnabled);
+        body.put("heartbeatConfigured", heartbeatConfigured);
+        body.put("lastHeartbeatSuccessAt", lastOk != null ? lastOk.toString() : "");
+        body.put("lastHeartbeatAttemptAt", lastAttempt != null ? lastAttempt.toString() : "");
+        String hbErr = edgeCloudLinkTracker.getLastHeartbeatError();
+        body.put("lastHeartbeatError", hbErr != null ? hbErr : "");
+        body.put("cloudHeartbeatReachable", tryLive && recentlyOk);
+        body.put("syncLagSeconds", lagSeconds);
+        return ResponseEntity.ok(body);
     }
 
     @GetMapping("/sync-status")

@@ -57,6 +57,7 @@ class EdgeNodeServiceHeartbeatTest {
         assertThat(dto.getStatus()).isEqualTo(EdgeNodeStatus.ONLINE);
         assertThat(dto.getLastSeenAt()).isNotNull();
         assertThat(dto.getLastSyncAt()).isNotNull();
+        assertThat(dto.getEffectiveOnline()).isTrue();
         verify(notificationService).publishToRestaurant(eq(3L), eq("edge_nodes"), anyMap());
     }
 }

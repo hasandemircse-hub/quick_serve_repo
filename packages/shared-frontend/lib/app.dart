@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/auth/auth_session_events.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/providers/customer_session_provider.dart';
+import 'core/providers/edge_shell_providers.dart';
+import 'core/widgets/edge_cloud_link_banner.dart';
 import 'routes.dart';
 
 class QuickServeApp extends ConsumerStatefulWidget {
@@ -80,11 +82,25 @@ class _QuickServeAppState extends ConsumerState<QuickServeApp> {
       });
     }
 
+    final showEdgeCloudBanner = ref.watch(showEdgeCloudLinkBannerProvider);
+
     return MaterialApp.router(
       title: 'QuickServe',
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: _messengerKey,
       routerConfig: router,
+      builder: (context, child) {
+        if (!showEdgeCloudBanner) {
+          return child ?? const SizedBox.shrink();
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const EdgeCloudLinkBanner(),
+            Expanded(child: child ?? const SizedBox.shrink()),
+          ],
+        );
+      },
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

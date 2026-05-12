@@ -46,6 +46,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
      * /topic/restaurant/{restaurantId}/tables       → Admin için masa durumu
      * /topic/restaurant/{restaurantId}/calls        → Garson çağrıları
      * /topic/restaurant/{restaurantId}/edge_ops    → Edge senkron olay özeti (LWW / apply)
+     * /topic/restaurant/{restaurantId}/edge_master → Master snapshot geçersiz; edge anında pull tetikler
      * /topic/restaurant/{restaurantId}/edge_nodes  → Edge node heartbeat / durum
      * /topic/session/{sessionToken}/status          → Müşteri sipariş durumu
      * /user/{username}/notifications               → Kullanıcıya özel bildirimler

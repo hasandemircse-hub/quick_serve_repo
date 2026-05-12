@@ -15,7 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
         "EDGE_SQLITE_PATH=./target/edge-ops-lww-test.db",
         "app.edge.ops-pull-enabled=false",
         "app.edge.heartbeat-enabled=false",
-        "app.edge.sync.worker-enabled=false"
+        "app.edge.sync.worker-enabled=false",
+        "app.edge.cloud-ws-enabled=false"
 })
 class EdgeOpsLocalCacheLwwTest {
 

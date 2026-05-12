@@ -15,7 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest(properties = {
-        "EDGE_SQLITE_PATH=./target/edge-idem-test.db"
+        "EDGE_SQLITE_PATH=./target/edge-idem-test.db",
+        "app.edge.cloud-ws-enabled=false"
 })
 class DeviceAbstractionIdempotencyTest {
 

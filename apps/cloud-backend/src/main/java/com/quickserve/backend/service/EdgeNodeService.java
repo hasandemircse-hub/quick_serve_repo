@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.List;
@@ -22,6 +23,9 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class EdgeNodeService {
+
+    /** Edge varsayılan heartbeat 30 sn; gecikme toleransı ile çevrimdışı sayılır. */
+    private static final int EFFECTIVE_ONLINE_MAX_AGE_SECONDS = 90;
 
     private final EdgeNodeRepository edgeNodeRepository;
     private final RestaurantService restaurantService;
@@ -140,6 +144,10 @@ public class EdgeNodeService {
     }
 
     private EdgeNodeResponse toDto(EdgeNode edgeNode) {
+        LocalDateTime lastSeen = edgeNode.getLastSeenAt();
+        LocalDateTime now = LocalDateTime.now();
+        boolean effectiveOnline = lastSeen != null
+                && ChronoUnit.SECONDS.between(lastSeen, now) <= EFFECTIVE_ONLINE_MAX_AGE_SECONDS;
         return EdgeNodeResponse.builder()
                 .id(edgeNode.getId())
                 .restaurantId(edgeNode.getRestaurant().getId())
@@ -148,10 +156,11 @@ public class EdgeNodeService {
                 .localIp(edgeNode.getLocalIp())
                 .status(edgeNode.getStatus())
                 .isActive(edgeNode.getIsActive())
-                .lastSeenAt(edgeNode.getLastSeenAt())
+                .lastSeenAt(lastSeen)
                 .lastSyncAt(edgeNode.getLastSyncAt())
                 .createdAt(edgeNode.getCreatedAt())
                 .updatedAt(edgeNode.getUpdatedAt())
+                .effectiveOnline(effectiveOnline)
                 .build();
     }
 }

@@ -22,7 +22,7 @@ import java.lang.reflect.Type;
 import java.util.List;
 
 /**
- * Cloud'daki {@code /topic/restaurant/{id}/edge_ops} konusunu dinler; mesaj gelince pull reconciliation tetikler.
+ * Cloud STOMP: {@code edge_ops} (ops pull) ve {@code edge_master} (snapshot yenileme).
  */
 @Component
 @ConditionalOnProperty(name = "app.edge.cloud-ws-enabled", havingValue = "true")
@@ -32,13 +32,19 @@ public class EdgeCloudOpsStompClient {
 
     private final CloudBridgeService cloudBridgeService;
     private final EdgeOpsPullService edgeOpsPullService;
+    private final EdgeBootstrapSyncService edgeBootstrapSyncService;
 
     @Value("${app.edge.restaurant-id:0}")
     private long restaurantId;
 
-    public EdgeCloudOpsStompClient(CloudBridgeService cloudBridgeService, EdgeOpsPullService edgeOpsPullService) {
+    public EdgeCloudOpsStompClient(
+            CloudBridgeService cloudBridgeService,
+            EdgeOpsPullService edgeOpsPullService,
+            EdgeBootstrapSyncService edgeBootstrapSyncService
+    ) {
         this.cloudBridgeService = cloudBridgeService;
         this.edgeOpsPullService = edgeOpsPullService;
+        this.edgeBootstrapSyncService = edgeBootstrapSyncService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -83,8 +89,8 @@ public class EdgeCloudOpsStompClient {
         StompSessionHandlerAdapter handler = new StompSessionHandlerAdapter() {
             @Override
             public void afterConnected(StompSession session, StompHeaders connectedHeaders) {
-                String topic = "/topic/restaurant/" + restaurantId + "/edge_ops";
-                session.subscribe(topic, new StompFrameHandler() {
+                String opsTopic = "/topic/restaurant/" + restaurantId + "/edge_ops";
+                session.subscribe(opsTopic, new StompFrameHandler() {
                     @Override
                     public Type getPayloadType(StompHeaders headers) {
                         return String.class;
@@ -95,7 +101,24 @@ public class EdgeCloudOpsStompClient {
                         edgeOpsPullService.pullAfterWsHint();
                     }
                 });
-                log.info("edge STOMP subscribed {}", topic);
+                log.info("edge STOMP subscribed {}", opsTopic);
+
+                String masterTopic = "/topic/restaurant/" + restaurantId + "/edge_master";
+                session.subscribe(masterTopic, new StompFrameHandler() {
+                    @Override
+                    public Type getPayloadType(StompHeaders headers) {
+                        return String.class;
+                    }
+
+                    @Override
+                    public void handleFrame(StompHeaders headers, Object payload) {
+                        Thread.ofVirtual().start(() -> {
+                            boolean ok = edgeBootstrapSyncService.pullSnapshotFromCloud();
+                            log.info("edge_master → snapshot pull {}", ok ? "ok" : "skipped/failed");
+                        });
+                    }
+                });
+                log.info("edge STOMP subscribed {}", masterTopic);
             }
         };
 

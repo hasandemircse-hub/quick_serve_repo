@@ -1,5 +1,6 @@
 package com.quickserve.backend.controller;
 
+import com.quickserve.backend.dto.edge.EdgeNodeResponse;
 import com.quickserve.backend.dto.menu.CategoryRequest;
 import com.quickserve.backend.dto.menu.MenuItemRequest;
 import com.quickserve.backend.dto.menu.MenuItemResponse;
@@ -26,6 +27,7 @@ import java.util.Map;
 @Tag(name = "Admin", description = "Restoran admin ekranı")
 public class AdminController {
 
+    private final EdgeNodeService edgeNodeService;
     private final TableService tableService;
     private final TableGroupService tableGroupService;
     private final MenuService menuService;
@@ -36,6 +38,11 @@ public class AdminController {
 
     private Long restaurantId() {
         return securityUtils.getCurrentRestaurantId();
+    }
+
+    @GetMapping("/edge-nodes")
+    public ResponseEntity<List<EdgeNodeResponse>> listEdgeNodes() {
+        return ResponseEntity.ok(edgeNodeService.getByRestaurantId(restaurantId()));
     }
 
     // ──── Masa Yönetimi ──────────────────────────────────────────────────────

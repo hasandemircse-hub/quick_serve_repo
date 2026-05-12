@@ -47,6 +47,17 @@ class ApiClient {
     headers: {'Content-Type': 'application/json'},
   );
 
+  /// Edge snapshot'tan okunan admin listeleri (yazmalar cloud'da).
+  static bool adminSnapshotReadOnEdge(String path) {
+    final p = path.split('?').first;
+    return p == '/admin/tables' ||
+        p == '/admin/staff' ||
+        p == '/admin/menu/categories' ||
+        p == '/admin/menu/items' ||
+        p == '/admin/table-groups' ||
+        p == '/admin/summary';
+  }
+
   bool _isEdgePath(String path) {
     // Edge enrollment claim cloud-backend'te; edge-backend'te yok.
     if (path.startsWith('/edge/enrollment')) {
@@ -56,15 +67,25 @@ class ApiClient {
       '/edge',
       '/waiter',
       '/kitchen',
-      '/admin',
       '/notifications',
     ];
     return edgePrefixes.any(path.startsWith);
   }
 
-  Dio _resolveClient(String path, String? sessionToken) {
+  Dio _resolveClient(String path, String? sessionToken, String httpMethod) {
     // Customer session akışı cloud gateway üzerinden devam eder.
     if (sessionToken != null) return _cloudDio;
+    final p0 = path.split('?').first;
+    if (p0.startsWith('/admin') || path.startsWith('/admin')) {
+      final m = httpMethod.toUpperCase();
+      if (m != 'GET' && m != 'HEAD') {
+        return _cloudDio;
+      }
+      if (adminSnapshotReadOnEdge(path)) {
+        return _edgeDio;
+      }
+      return _cloudDio;
+    }
     return _isEdgePath(path) ? _edgeDio : _cloudDio;
   }
 
@@ -75,7 +96,7 @@ class ApiClient {
     Map<String, dynamic>? params,
     String? sessionToken,
   }) {
-    return _resolveClient(path, sessionToken).get(
+    return _resolveClient(path, sessionToken, 'GET').get(
       path,
       queryParameters: params,
       options: Options(
@@ -87,7 +108,7 @@ class ApiClient {
   }
 
   Future<Response> post(String path, {dynamic data, String? sessionToken}) {
-    return _resolveClient(path, sessionToken).post(
+    return _resolveClient(path, sessionToken, 'POST').post(
       path,
       data: data,
       options: Options(
@@ -112,7 +133,7 @@ class ApiClient {
   }
 
   Future<Response> getBytes(String path, {Map<String, dynamic>? params}) {
-    final client = _resolveClient(path, null);
+    final client = _resolveClient(path, null, 'GET');
     return client.get(
       path,
       queryParameters: params,
@@ -121,11 +142,11 @@ class ApiClient {
   }
 
   Future<Response> put(String path, {dynamic data}) =>
-      _resolveClient(path, null).put(path, data: data);
+      _resolveClient(path, null, 'PUT').put(path, data: data);
   Future<Response> delete(String path) =>
-      _resolveClient(path, null).delete(path);
+      _resolveClient(path, null, 'DELETE').delete(path);
   Future<Response> patch(String path, {dynamic data}) =>
-      _resolveClient(path, null).patch(path, data: data);
+      _resolveClient(path, null, 'PATCH').patch(path, data: data);
 }
 
 class _AuthInterceptor extends Interceptor {

@@ -13,6 +13,7 @@ public class EdgeHeartbeatScheduler {
 
     private final CloudBridgeService cloudBridgeService;
     private final EdgeOutboxFlushTracker edgeOutboxFlushTracker;
+    private final EdgeCloudLinkTracker edgeCloudLinkTracker;
 
     @Value("${app.edge.heartbeat-enabled:true}")
     private boolean heartbeatEnabled;
@@ -23,9 +24,13 @@ public class EdgeHeartbeatScheduler {
     @Value("${app.edge.node-id:edge-local}")
     private String nodeId;
 
-    public EdgeHeartbeatScheduler(CloudBridgeService cloudBridgeService, EdgeOutboxFlushTracker edgeOutboxFlushTracker) {
+    public EdgeHeartbeatScheduler(
+            CloudBridgeService cloudBridgeService,
+            EdgeOutboxFlushTracker edgeOutboxFlushTracker,
+            EdgeCloudLinkTracker edgeCloudLinkTracker) {
         this.cloudBridgeService = cloudBridgeService;
         this.edgeOutboxFlushTracker = edgeOutboxFlushTracker;
+        this.edgeCloudLinkTracker = edgeCloudLinkTracker;
     }
 
     @Scheduled(fixedDelayString = "${app.edge.heartbeat-interval-ms:30000}")
@@ -36,9 +41,12 @@ public class EdgeHeartbeatScheduler {
         if (nodeId == null || nodeId.isBlank()) {
             return;
         }
+        edgeCloudLinkTracker.recordHeartbeatAttempt();
         try {
             cloudBridgeService.postHeartbeat(restaurantId, nodeId, edgeOutboxFlushTracker.lastFlushIso());
+            edgeCloudLinkTracker.recordHeartbeatSuccess();
         } catch (Exception ex) {
+            edgeCloudLinkTracker.recordHeartbeatFailure(ex.getMessage());
             log.debug("edge heartbeat failed: {}", ex.getMessage());
         }
     }
